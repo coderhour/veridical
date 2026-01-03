@@ -1,0 +1,164 @@
+"""Patch application for the synchronizer."""
+
+import subprocess
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from veridical.models.result import PatchResult, PatchStatus
+from veridical.synchronizer.branch import BranchManager
+from veridical.synchronizer.git import GitWrapper
+
+if TYPE_CHECKING:
+    from veridical.config.schema import VeridicalConfig
+
+
+class PatchApplier:
+    """Applies patches from Jules to the local repository."""
+
+    def __init__(self, repo_path: Path) -> None:
+        """Initialize the patch applier.
+
+        Args:
+            repo_path: Path to the repository root
+        """
+        self.repo_path = repo_path
+        self.git = GitWrapper(repo_path)
+
+    def apply_patch(self, patch_data: str) -> PatchResult:
+        """Apply a patch to the repository.
+
+        Args:
+            patch_data: Unified diff patch content
+
+        Returns:
+            Result of the patch application
+        """
+        if not patch_data.strip():
+            return PatchResult(
+                success=True,
+                status=PatchStatus.APPLIED,
+                files_changed=[],
+                diff_hash="",
+            )
+
+        try:
+            # Write patch to temp file and apply
+            patch_file = self.repo_path / ".veridical_patch.tmp"
+            patch_file.write_text(patch_data)
+
+            try:
+                subprocess.run(
+                    ["git", "apply", str(patch_file)],
+                    cwd=self.repo_path,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            finally:
+                patch_file.unlink(missing_ok=True)
+
+            # Get changed files and diff hash
+            files = self.git.get_diff_stat()
+            diff_hash = self.git.compute_diff_hash()
+
+            return PatchResult.applied(files_changed=files, diff_hash=diff_hash)
+
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr or str(e)
+            if "conflict" in error_msg.lower():
+                return PatchResult.failed(error_msg, status=PatchStatus.CONFLICT)
+            return PatchResult.failed(error_msg)
+
+
+class Synchronizer:
+    """Main synchronizer coordinating branches and patches.
+
+    Manages the full synchronization workflow:
+    1. Create isolation branches
+    2. Apply patches
+    3. Clean up or merge branches
+    """
+
+    def __init__(
+        self,
+        config: "VeridicalConfig",
+        repo_path: Path,
+    ) -> None:
+        """Initialize the synchronizer.
+
+        Args:
+            config: Veridical configuration
+            repo_path: Path to the repository root
+        """
+        self.config = config
+        self.repo_path = repo_path
+        self.git = GitWrapper(repo_path)
+        self.branch_manager = BranchManager(
+            repo_path,
+            base_branch=config.git.base_branch,
+            branch_prefix=config.git.branch_prefix,
+        )
+        self.patch_applier = PatchApplier(repo_path)
+
+    def create_iteration_branch(self, iteration: int) -> str:
+        """Create and checkout an iteration branch.
+
+        Args:
+            iteration: Iteration number
+
+        Returns:
+            Name of the created branch
+        """
+        return self.branch_manager.create_iteration_branch(iteration)
+
+    def apply_patch(self, patch_data: str) -> PatchResult:
+        """Apply a patch to the current branch.
+
+        Args:
+            patch_data: Unified diff patch content
+
+        Returns:
+            Result of the patch application
+        """
+        return self.patch_applier.apply_patch(patch_data)
+
+    def cleanup_branch(self, branch_name: str) -> None:
+        """Clean up a failed iteration branch.
+
+        Args:
+            branch_name: Name of the branch to delete
+        """
+        self.branch_manager.cleanup_branch(branch_name)
+
+    def merge_to_main(self, branch_name: str) -> str:
+        """Merge a successful iteration to main.
+
+        Args:
+            branch_name: Name of the branch to merge
+
+        Returns:
+            Commit hash after merge
+        """
+        commit = self.branch_manager.merge_to_main(branch_name)
+
+        # Auto cleanup if configured
+        if self.config.git.auto_cleanup and self.git.branch_exists(branch_name):
+            self.git.delete_branch(branch_name, force=True)
+
+        return commit
+
+    def get_changed_files(self) -> list[str]:
+        """Get list of changed files in current state.
+
+        Returns:
+            List of file paths with changes
+        """
+        return self.git.get_diff_stat()
+
+    def get_diff_hash(self) -> str:
+        """Get hash of current diff.
+
+        Returns:
+            Hash string for stagnation detection
+        """
+        return self.git.compute_diff_hash()
