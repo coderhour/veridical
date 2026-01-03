@@ -9,7 +9,6 @@ import respx
 from veridical.api.client import JulesClient
 from veridical.api.exceptions import APIError, AuthenticationError, RateLimitError
 from veridical.api.models import (
-    AutomationMode,
     CreateSessionRequest,
     GitHubRepoContext,
     SessionResponse,

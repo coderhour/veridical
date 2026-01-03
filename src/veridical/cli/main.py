@@ -7,7 +7,7 @@ from rich.console import Console
 
 from veridical import __version__
 from veridical.cli.config import config_app
-from veridical.cli.fix import fix
+from veridical.cli.run import run
 from veridical.cli.status import status
 from veridical.cli.verify import verify
 
@@ -20,7 +20,7 @@ app = typer.Typer(
 )
 
 # Add subcommands
-app.command()(fix)
+app.command()(run)
 app.command()(verify)
 app.command()(status)
 app.add_typer(config_app, name="config")

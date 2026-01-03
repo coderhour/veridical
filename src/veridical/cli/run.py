@@ -1,4 +1,4 @@
-"""Fix command - initiates the autonomous quality loop."""
+"""Run command - initiates the autonomous quality loop."""
 
 from pathlib import Path
 from typing import Annotated
@@ -9,7 +9,7 @@ from rich.console import Console
 console = Console()
 
 
-def fix(
+def run(
     task: Annotated[
         str,
         typer.Argument(
@@ -40,7 +40,7 @@ def fix(
         ),
     ] = None,
 ) -> None:
-    """Start an autonomous fix loop for the given task.
+    """Start an autonomous task loop with Jules.
 
     The supervisor will:
     1. Dispatch the task to Jules
@@ -49,13 +49,18 @@ def fix(
     4. Run quality gates
     5. Loop until success or max iterations
 
-    Example:
-        veridical fix "Fix the login validation bug"
+    Works for any task: bug fixes, new features, refactoring, documentation, etc.
+
+    Examples:
+        veridical run "Fix the login validation bug"
+        veridical run "Add user profile page with avatar upload"
+        veridical run "Refactor the authentication module"
+        veridical run "Add comprehensive tests for the API client"
     """
     if dry_run:
         console.print("[yellow]Dry run mode - no API calls will be made[/yellow]")
 
-    console.print(f"[bold]Starting fix loop for:[/bold] {task}")
+    console.print(f"[bold]Starting autonomous task:[/bold] {task}")
 
     if max_iterations:
         console.print(f"[dim]Max iterations: {max_iterations}[/dim]")

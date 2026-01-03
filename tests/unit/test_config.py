@@ -127,16 +127,16 @@ class TestConfigLoading:
         assert config.jules.poll_interval == 30
         assert config.supervisor.max_iterations == 10
 
-    def test_load_config_defaults(self, temp_dir: Path) -> None:
+    def test_load_config_defaults(self) -> None:
         """Test loading config with defaults when no file."""
         config = load_config(require_file=False)
         assert config.jules.poll_interval == 30  # default value
 
     def test_load_config_require_file(self, temp_dir: Path) -> None:
         """Test requiring config file when not present."""
+        original_dir = Path.cwd()
         import os
 
-        original_dir = os.getcwd()
         os.chdir(temp_dir)
         try:
             with pytest.raises(ConfigurationError) as exc_info:

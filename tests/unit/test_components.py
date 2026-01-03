@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from veridical.config.schema import QualityGate, VeridicalConfig
 from veridical.dispatcher.agents_md import AgentsMdInjector
 from veridical.dispatcher.prompt import PromptBuilder
 from veridical.models.result import GateResult, GateStatus, VerificationResult
@@ -147,7 +146,7 @@ class TestAgentsMdInjector:
 
     def test_strip_ephemeral(self) -> None:
         """Test ephemeral section removal."""
-        injector = AgentsMdInjector(Path("."))
+        injector = AgentsMdInjector(Path())
         content = """\
 # Rules
 
