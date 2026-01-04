@@ -116,12 +116,12 @@ class Poller:
                 )
 
             # Handle waiting states
-            if session.state == SessionState.WAITING_FOR_PLAN_APPROVAL:
+            if session.state == SessionState.AWAITING_PLAN_APPROVAL:
                 if self.config.jules.auto_approve_plans:
                     logger.info(f"Auto-approving plan for session {session_id}")
                     await self.api_client.approve_plan(session_id)
 
-            elif session.state == SessionState.WAITING_FOR_INPUT:
+            elif session.state == SessionState.AWAITING_USER_FEEDBACK:
                 # Send a default continuation message
                 await self.api_client.send_message(
                     session_id,

@@ -9,13 +9,11 @@ from pydantic import AliasChoices, BaseModel, Field
 class SessionState(str, Enum):
     """State of a Jules session as returned by the API."""
 
-    PENDING = "PENDING"
     QUEUED = "QUEUED"
-    RUNNING = "RUNNING"
     PLANNING = "PLANNING"
+    AWAITING_PLAN_APPROVAL = "AWAITING_PLAN_APPROVAL"
+    AWAITING_USER_FEEDBACK = "AWAITING_USER_FEEDBACK"
     IN_PROGRESS = "IN_PROGRESS"
-    WAITING_FOR_PLAN_APPROVAL = "WAITING_FOR_PLAN_APPROVAL"
-    WAITING_FOR_INPUT = "WAITING_FOR_INPUT"
     PAUSED = "PAUSED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"

@@ -96,7 +96,7 @@ class TestSupervisorSessionResume:
         # Mock session creation
         mock_session = SessionResponse(
             name="sessions/new-session-456",
-            state=SessionState.RUNNING,
+            state=SessionState.IN_PROGRESS,
         )
 
         # Mock successful poll result

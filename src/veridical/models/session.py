@@ -12,10 +12,12 @@ class SessionStatus(str, Enum):
     Maps to the states returned by the Jules API.
     """
 
-    PENDING = "PENDING"
-    RUNNING = "RUNNING"
-    WAITING_FOR_PLAN_APPROVAL = "WAITING_FOR_PLAN_APPROVAL"
-    WAITING_FOR_INPUT = "WAITING_FOR_INPUT"
+    QUEUED = "QUEUED"
+    PLANNING = "PLANNING"
+    AWAITING_PLAN_APPROVAL = "AWAITING_PLAN_APPROVAL"
+    AWAITING_USER_FEEDBACK = "AWAITING_USER_FEEDBACK"
+    IN_PROGRESS = "IN_PROGRESS"
+    PAUSED = "PAUSED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
@@ -26,8 +28,8 @@ class SessionStatus(str, Enum):
     def is_waiting(self) -> bool:
         """Check if this state requires user input."""
         return self in (
-            SessionStatus.WAITING_FOR_PLAN_APPROVAL,
-            SessionStatus.WAITING_FOR_INPUT,
+            SessionStatus.AWAITING_PLAN_APPROVAL,
+            SessionStatus.AWAITING_USER_FEEDBACK,
         )
 
 

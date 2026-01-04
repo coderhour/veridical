@@ -24,14 +24,14 @@ class TestSessionStatus:
         """Test terminal state detection."""
         assert SessionStatus.COMPLETED.is_terminal()
         assert SessionStatus.FAILED.is_terminal()
-        assert not SessionStatus.PENDING.is_terminal()
-        assert not SessionStatus.RUNNING.is_terminal()
+        assert not SessionStatus.QUEUED.is_terminal()
+        assert not SessionStatus.IN_PROGRESS.is_terminal()
 
     def test_waiting_states(self) -> None:
         """Test waiting state detection."""
-        assert SessionStatus.WAITING_FOR_PLAN_APPROVAL.is_waiting()
-        assert SessionStatus.WAITING_FOR_INPUT.is_waiting()
-        assert not SessionStatus.RUNNING.is_waiting()
+        assert SessionStatus.AWAITING_PLAN_APPROVAL.is_waiting()
+        assert SessionStatus.AWAITING_USER_FEEDBACK.is_waiting()
+        assert not SessionStatus.IN_PROGRESS.is_waiting()
         assert not SessionStatus.COMPLETED.is_waiting()
 
 
@@ -43,10 +43,10 @@ class TestSessionInfo:
         """Test basic session info creation."""
         info = SessionInfo(
             session_id="session-123",
-            status=SessionStatus.RUNNING,
+            status=SessionStatus.IN_PROGRESS,
         )
         assert info.session_id == "session-123"
-        assert info.status == SessionStatus.RUNNING
+        assert info.status == SessionStatus.IN_PROGRESS
 
     def test_full_creation(self) -> None:
         """Test session info with all fields."""

@@ -49,12 +49,23 @@ class TestAPIModels:
         """Test SessionResponse model."""
         response = SessionResponse(
             name="sessions/abc123",
-            state=SessionState.RUNNING,
+            state=SessionState.IN_PROGRESS,
             create_time=datetime.now(),
             update_time=datetime.now(),
         )
         assert response.session_id == "abc123"
-        assert response.state == SessionState.RUNNING
+        assert response.state == SessionState.IN_PROGRESS
+
+    def test_session_response_awaiting_plan_approval(self) -> None:
+        """Test SessionResponse model with AWAITING_PLAN_APPROVAL state."""
+        response = SessionResponse(
+            name="sessions/abc123",
+            state=SessionState.AWAITING_PLAN_APPROVAL,
+            create_time=datetime.now(),
+            update_time=datetime.now(),
+        )
+        assert response.state == SessionState.AWAITING_PLAN_APPROVAL
+        assert response.state == "AWAITING_PLAN_APPROVAL"
 
 
 @pytest.mark.unit
@@ -88,7 +99,7 @@ class TestJulesClient:
                 200,
                 json={
                     "name": "sessions/test-123",
-                    "state": "PENDING",
+                    "state": "QUEUED",
                     "createTime": "2024-01-01T00:00:00Z",
                     "updateTime": "2024-01-01T00:00:00Z",
                 },
@@ -103,7 +114,7 @@ class TestJulesClient:
             response = await client.create_session(request)
 
         assert response.session_id == "test-123"
-        assert response.state == SessionState.PENDING
+        assert response.state == SessionState.QUEUED
 
     @pytest.mark.asyncio
     @respx.mock
