@@ -108,18 +108,24 @@ def load_config(
     return config
 
 
-def generate_config_template(output_path: Path, *, force: bool = False) -> Path:
+def generate_config_template(
+    output_path: Path,
+    *,
+    force: bool = False,
+    template: str = "python",
+) -> Path:
     """Generate a configuration template file.
 
     Args:
         output_path: Path to write the template to.
         force: If True, overwrite existing file.
+        template: Name of the template to use.
 
     Returns:
         Path to the generated file.
 
     Raises:
-        ConfigurationError: If file exists and force is False.
+        ConfigurationError: If file exists and force is False, or template not found.
     """
     if output_path.exists() and not force:
         raise ConfigurationError(
@@ -127,6 +133,6 @@ def generate_config_template(output_path: Path, *, force: bool = False) -> Path:
             details="Use --force to overwrite",
         )
 
-    template = get_config_template()
-    output_path.write_text(template)
+    template_content = get_config_template(template)
+    output_path.write_text(template_content)
     return output_path

@@ -72,6 +72,14 @@ def config_init(
             help="Overwrite existing file",
         ),
     ] = False,
+    template: Annotated[
+        str,
+        typer.Option(
+            "--template",
+            "-t",
+            help="Name of the template to use (e.g., python)",
+        ),
+    ] = "python",
 ) -> None:
     """Create a configuration template file.
 
@@ -79,7 +87,7 @@ def config_init(
     and sensible defaults.
     """
     try:
-        path = generate_config_template(output, force=force)
+        path = generate_config_template(output, force=force, template=template)
         console.print(f"[green]Created configuration file: {path}[/green]")
         console.print("[dim]Edit this file to customize your settings.[/dim]")
     except ConfigurationError as e:
@@ -88,11 +96,24 @@ def config_init(
 
 
 @config_app.command("template")
-def config_template() -> None:
+def config_template(
+    template: Annotated[
+        str,
+        typer.Option(
+            "--template",
+            "-t",
+            help="Name of the template to use (e.g., python)",
+        ),
+    ] = "python",
+) -> None:
     """Print the configuration template to stdout.
 
     Useful for piping to a file or reviewing the format.
     """
-    template = get_config_template()
-    syntax = Syntax(template, "yaml", theme="monokai", line_numbers=True)
-    console.print(syntax)
+    try:
+        template_content = get_config_template(template)
+        syntax = Syntax(template_content, "yaml", theme="monokai", line_numbers=True)
+        console.print(syntax)
+    except ConfigurationError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(code=1) from None
