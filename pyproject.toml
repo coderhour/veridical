@@ -3,7 +3,7 @@ name = "veridical"
 version = "0.1.0"
 description = "Local Supervisory Control System for Google Jules - autonomous quality assurance loops"
 readme = "README.md"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 requires-python = ">=3.11"
 authors = [{ name = "Veridical Contributors" }]
 keywords = ["jules", "ai", "automation", "code-quality", "testing"]
