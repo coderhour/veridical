@@ -1,16 +1,48 @@
 """Configuration schema definitions using Pydantic."""
 
-from pydantic import BaseModel, Field
+from typing import Literal, Optional
+
+from pydantic import BaseModel, Field, root_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class QualityGate(BaseModel):
-    """Configuration for a single quality gate command."""
+    """Configuration for a single quality gate."""
 
     name: str = Field(..., description="Name of the quality gate")
-    command: str = Field(..., description="Command to execute")
+    type: Literal["command", "task_completion"] = Field(
+        "command", description="Type of the quality gate"
+    )
+    command: Optional[str] = Field(
+        None, description="Command to execute for 'command' type gates"
+    )
+    path: Optional[str] = Field(
+        None, description="File path for 'task_completion' type gates"
+    )
     timeout: int = Field(300, ge=1, description="Timeout in seconds")
     required: bool = Field(True, description="Whether this gate must pass")
+
+    @root_validator(skip_on_failure=True)
+    def check_gate_config(cls, values: dict) -> dict:
+        """Validate gate-specific configuration."""
+        gate_type = values.get("type")
+        command = values.get("command")
+        path = values.get("path")
+
+        if gate_type == "command":
+            if not command:
+                raise ValueError("`command` is required for 'command' gate type")
+            if path is not None:
+                raise ValueError("`path` is not applicable for 'command' gate type")
+        elif gate_type == "task_completion":
+            if not path:
+                raise ValueError("`path` is required for 'task_completion' gate type")
+            if command is not None:
+                raise ValueError(
+                    "`command` is not applicable for 'task_completion' gate type"
+                )
+
+        return values
 
 
 class JulesConfig(BaseModel):
@@ -74,6 +106,12 @@ class VerifierConfig(BaseModel):
 
     quality_gates: list[QualityGate] = Field(
         default_factory=lambda: [
+            QualityGate(
+                name="task_completion",
+                type="task_completion",
+                required=True,
+                path="openspec/changes/add-task-completion-verifier/tasks.md",
+            ),
             QualityGate(name="pytest", command="pytest"),
             QualityGate(name="ruff", command="ruff check src/"),
             QualityGate(name="mypy", command="mypy src/"),

@@ -1,22 +1,24 @@
 """Quality gate verification."""
 
+import asyncio
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from veridical.models.result import VerificationResult
+from veridical.models.result import GateResult, VerificationResult
 from veridical.verifier.feedback import FeedbackGenerator
 from veridical.verifier.runner import CommandRunner
+from veridical.verifier.task_completion import verify_task_completion
 
 if TYPE_CHECKING:
-    from veridical.config.schema import VeridicalConfig
+    from veridical.config.schema import QualityGate, VeridicalConfig
 
 
 class Verifier:
     """Runs quality gates and generates verification results.
 
     The Verifier is responsible for:
-    1. Executing configured quality gate commands
+    1. Executing configured quality gates
     2. Collecting and aggregating results
     3. Generating feedback for failed runs
     """
@@ -39,6 +41,20 @@ class Verifier:
             max_length=config.verifier.summary_max_length,
         )
 
+    async def _run_gate_logic(self, gate: "QualityGate") -> GateResult:
+        """Run the logic for a single gate based on its type."""
+        if gate.type == "command":
+            return await self.runner.run_gate(gate)
+        if gate.type == "task_completion":
+            # The schema validates that `path` is present.
+            tasks_file_path = self.repo_path / gate.path
+            return await asyncio.to_thread(
+                verify_task_completion, gate.name, tasks_file_path
+            )
+
+        # This should be unreachable due to schema validation
+        raise ValueError(f"Unknown quality gate type: {gate.type}")
+
     async def run_all(self) -> VerificationResult:
         """Run all configured quality gates.
 
@@ -47,10 +63,10 @@ class Verifier:
         """
         start_time = time.monotonic()
         gates = self.config.verifier.quality_gates
-        results = []
+        results: list[GateResult] = []
 
         for gate in gates:
-            result = await self.runner.run_gate(gate)
+            result = await self._run_gate_logic(gate)
             results.append(result)
 
             # Stop early if a required gate fails
@@ -87,7 +103,7 @@ class Verifier:
         if gate is None:
             raise ValueError(f"Unknown quality gate: {gate_name}")
 
-        result = await self.runner.run_gate(gate)
+        result = await self._run_gate_logic(gate)
         duration = time.monotonic() - start_time
 
         return VerificationResult(
