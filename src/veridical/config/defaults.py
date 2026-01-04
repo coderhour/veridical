@@ -10,6 +10,7 @@ class TemplateType(str, Enum):
     NODEJS = "nodejs"
     ELIXIR = "elixir"
     JAVA = "java"
+    RUST = "rust"
 
 
 PYTHON_CONFIG_TEMPLATE = """\
@@ -45,6 +46,45 @@ verifier:
       required: true
     - name: mypy
       command: mypy src/
+      timeout: 120
+      required: true
+  summary_max_length: 2000
+
+git:
+  base_branch: main
+  branch_prefix: veridical/iter-
+  auto_cleanup: true
+"""
+
+RUST_CONFIG_TEMPLATE = """\
+# Veridical Configuration (Rust)
+# See https://github.com/veridical/veridical for documentation
+
+jules:
+  api_base_url: https://jules.googleapis.com/v1alpha
+  poll_interval: 30
+  poll_timeout: 3600
+  auto_approve_plans: true
+  max_retries: 3
+  retry_delay: 1.0
+
+supervisor:
+  max_iterations: 10
+  max_consecutive_failures: 3
+  stagnation_threshold: 3
+
+verifier:
+  quality_gates:
+    - name: cargo-test
+      command: cargo test
+      timeout: 300
+      required: true
+    - name: cargo-clippy
+      command: cargo clippy -- -D warnings
+      timeout: 180
+      required: true
+    - name: cargo-fmt
+      command: cargo fmt -- --check
       timeout: 120
       required: true
   summary_max_length: 2000
@@ -187,6 +227,7 @@ TEMPLATES = {
     TemplateType.NODEJS: NODEJS_CONFIG_TEMPLATE,
     TemplateType.ELIXIR: ELIXIR_CONFIG_TEMPLATE,
     TemplateType.JAVA: JAVA_CONFIG_TEMPLATE,
+    TemplateType.RUST: RUST_CONFIG_TEMPLATE,
 }
 
 

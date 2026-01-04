@@ -155,6 +155,9 @@ veridical config init --template elixir
 
 # For Java
 veridical config init --template java
+
+# For Rust
+veridical config init --template rust
 ```
 
 This will generate a configuration file with sensible defaults for the chosen language. For example, the `nodejs` template will include quality gates for `npm test`, `eslint`, and `prettier`.

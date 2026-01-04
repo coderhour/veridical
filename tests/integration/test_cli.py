@@ -29,6 +29,7 @@ class TestCliConfigCommands:
             (TemplateType.NODEJS, "(Node.js)"),
             (TemplateType.ELIXIR, "(Elixir)"),
             (TemplateType.JAVA, "(Java with Gradle)"),
+            (TemplateType.RUST, "(Rust)"),
         ],
     )
     def test_config_init_templates(
@@ -61,6 +62,7 @@ class TestCliConfigCommands:
             (TemplateType.NODEJS, "(Node.js)"),
             (TemplateType.ELIXIR, "(Elixir)"),
             (TemplateType.JAVA, "(Java with Gradle)"),
+            (TemplateType.RUST, "(Rust)"),
         ],
     )
     def test_config_template_command(

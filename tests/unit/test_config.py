@@ -10,6 +10,7 @@ from veridical.config.defaults import (
     JAVA_CONFIG_TEMPLATE,
     NODEJS_CONFIG_TEMPLATE,
     PYTHON_CONFIG_TEMPLATE,
+    RUST_CONFIG_TEMPLATE,
     TemplateType,
     get_config_template,
 )
@@ -165,6 +166,7 @@ class TestConfigTemplate:
             (TemplateType.NODEJS, NODEJS_CONFIG_TEMPLATE),
             (TemplateType.ELIXIR, ELIXIR_CONFIG_TEMPLATE),
             (TemplateType.JAVA, JAVA_CONFIG_TEMPLATE),
+            (TemplateType.RUST, RUST_CONFIG_TEMPLATE),
         ],
     )
     def test_get_template(
@@ -211,6 +213,11 @@ class TestConfigTemplate:
                 TemplateType.JAVA,
                 ["gradle-test", "gradle-checkstyle"],
                 "(Java with Gradle)",
+            ),
+            (
+                TemplateType.RUST,
+                ["cargo-test", "cargo-clippy", "cargo-fmt"],
+                "(Rust)",
             ),
         ],
     )
