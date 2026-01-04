@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from veridical.api.exceptions import APIError
 from veridical.api.models import SessionResponse, SessionState
 from veridical.config.schema import (
     GitConfig,
@@ -214,12 +215,67 @@ class TestSupervisorSessionResume:
     async def test_resume_with_invalid_session_fails_gracefully(
         self, supervisor: Supervisor
     ) -> None:
-        """Test that invalid session ID fails gracefully through poller."""
+        """Test that invalid session ID fails gracefully with clear message."""
+        # Mock API error (404 Not Found) from poller
+        api_error = APIError(
+            "API request failed: 404",
+            status_code=404,
+            response_body='{"error": "Session not found"}',
+        )
+        with patch.object(supervisor.poller, "wait_for_completion", side_effect=api_error):
+            result = await supervisor.run("Test task", session_id="invalid-session-999")
+
+            # Verify failure with clear message
+            assert not result.success
+            assert result.failure_reason == "Invalid session ID"
+            assert "invalid-session-999" in result.error_context
+            assert "could not be found" in result.error_context
+            assert result.iterations == 1
+
+    @pytest.mark.asyncio
+    async def test_resume_with_timeout_fails_gracefully(self, supervisor: Supervisor) -> None:
+        """Test that timeout during resume fails gracefully."""
         # Mock timeout error from poller
         with patch.object(supervisor.poller, "wait_for_completion", side_effect=TimeoutError()):
-            result = await supervisor.run("Test task", session_id="invalid-session-999")
+            result = await supervisor.run("Test task", session_id="slow-session-123")
 
             # Verify failure
             assert not result.success
             assert result.failure_reason == "Session timed out"
+            assert result.iterations == 1
+
+    @pytest.mark.asyncio
+    async def test_resume_patch_failure_aborts_immediately(self, supervisor: Supervisor) -> None:
+        """Test that patch failure on resumed session aborts instead of retrying."""
+        # Mock successful poll result
+        poll_result = PollResult(
+            session_id="existing-session-123",
+            final_state=SessionState.COMPLETED,
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            poll_count=1,
+        )
+
+        # Mock failed patch application
+        patch_result = PatchResult.failed(error="patch failed: README.md: patch does not apply")
+
+        with (
+            patch.object(supervisor.poller, "wait_for_completion", return_value=poll_result),
+            patch.object(
+                supervisor.synchronizer, "create_iteration_branch", return_value="test-branch"
+            ),
+            patch.object(supervisor.synchronizer, "apply_session_patch", return_value=patch_result),
+            patch.object(supervisor.synchronizer, "cleanup_branch"),
+            patch.object(supervisor.dispatcher, "create_session") as mock_create_session,
+        ):
+            result = await supervisor.run("Test task", session_id="existing-session-123")
+
+            # Verify that dispatcher was NOT called (should abort, not retry)
+            mock_create_session.assert_not_called()
+
+            # Verify failure with appropriate message
+            assert not result.success
+            assert result.failure_reason == "Resumed session patch failed to apply"
+            assert "existing-session-123" in result.error_context
+            assert "diverged" in result.error_context
             assert result.iterations == 1

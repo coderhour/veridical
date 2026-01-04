@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from veridical.api.client import JulesClient
+from veridical.api.exceptions import APIError
 from veridical.api.models import SessionState
 from veridical.dispatcher.session import Dispatcher
 from veridical.models.result import LoopResult
@@ -133,6 +134,29 @@ class Supervisor:
                     started_at=started_at,
                     failure_reason="Session timed out",
                 )
+            except APIError as e:
+                # Handle API errors (e.g., invalid session ID returns 404)
+                self._transition_to(SupervisorState.FAILED)
+
+                # Provide clear message for resumed sessions
+                if session_id and iteration == 1:
+                    return LoopResult.failure_result(
+                        iterations=iteration,
+                        started_at=started_at,
+                        failure_reason="Invalid session ID",
+                        error_context=(
+                            f"The session ID '{session_id}' could not be found. "
+                            "Please verify the session ID is correct and try again.\n\n"
+                            f"API Error: {e}"
+                        ),
+                    )
+
+                return LoopResult.failure_result(
+                    iterations=iteration,
+                    started_at=started_at,
+                    failure_reason="API error during polling",
+                    error_context=str(e),
+                )
 
             if poll_result.final_state == SessionState.FAILED:
                 self._circuit_breaker.record_failure()
@@ -154,6 +178,24 @@ class Supervisor:
                 self._circuit_breaker.record_failure()
                 # Clean up branch
                 self.synchronizer.cleanup_branch(iter_branch)
+
+                # If this was a resumed session, abort instead of retrying
+                # The patch was created against a different codebase version
+                if session_id and iteration == 1:
+                    self._transition_to(SupervisorState.FAILED)
+                    return LoopResult.failure_result(
+                        iterations=iteration,
+                        started_at=started_at,
+                        failure_reason="Resumed session patch failed to apply",
+                        error_context=(
+                            f"The patch from session {session_id} could not be applied. "
+                            "This usually means your local code has diverged from what "
+                            "Jules worked against. Try syncing with the remote branch or "
+                            "starting a new session without --session-id.\n\n"
+                            f"Details: {patch_result.error}"
+                        ),
+                    )
+
                 error_context = f"Patch application failed: {patch_result.error}"
                 continue
 

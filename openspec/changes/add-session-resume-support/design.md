@@ -70,7 +70,8 @@ async def run(
 
 | Scenario | Behavior |
 |----------|----------|
-| Invalid session ID | Poller returns error, loop fails gracefully |
+| Invalid session ID | **Abort immediately** with clear error: "Invalid session ID" + session ID + "could not be found" |
 | Session already completed | Poller returns immediately, sync proceeds |
 | Session in FAILED state | Poll result indicates failure, loop may retry with new session |
 | Session still running | Poller waits for completion as usual |
+| Patch fails to apply | **Abort immediately** with clear error explaining code divergence (no retry) |
