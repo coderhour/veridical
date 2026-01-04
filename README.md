@@ -25,18 +25,62 @@ Veridical requires the following tools to be installed on your system:
 Clone the repository and install with uv:
 
 ```bash
-git clone https://github.com/veridical/veridical.git
+git clone https://github.com/coderhour/veridical.git
 cd veridical
 uv sync --all-extras
 ```
 
-### For Users (Future)
+### For Users (Global Installation)
 
-Once published, you'll be able to install via:
+Once published to PyPI, install Veridical globally as a CLI tool:
+
+#### Recommended: Using `uv` (Fast & Isolated)
 
 ```bash
+# Install globally
+uv tool install veridical
+
+# Update to latest version
+uv tool upgrade veridical
+
+# Uninstall
+uv tool uninstall veridical
+```
+
+#### Alternative: Using `pipx` (Also Good)
+
+```bash
+# Install globally
+pipx install veridical
+
+# Update
+pipx upgrade veridical
+
+# Uninstall
+pipx uninstall veridical
+```
+
+#### Traditional: Using `pip` (Not Recommended)
+
+```bash
+# System-wide install (may require sudo)
+pip install veridical
+
+# User-level install (no sudo needed)
+pip install --user veridical
+```
+
+**Note**: `uv tool` and `pipx` are recommended because they install CLI tools in isolated environments, avoiding dependency conflicts.
+
+### For Project Dependencies
+
+To add Veridical as a project dependency:
+
+```bash
+# With uv
 uv add veridical
-# or
+
+# With pip
 pip install veridical
 ```
 
