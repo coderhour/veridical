@@ -1,6 +1,6 @@
 """Configuration schema definitions using Pydantic."""
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, root_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,7 +19,7 @@ class QualityGate(BaseModel):
     required: bool = Field(True, description="Whether this gate must pass")
 
     @root_validator(skip_on_failure=True)
-    def check_gate_config(cls, values: dict) -> dict:
+    def check_gate_config(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Validate gate-specific configuration."""
         gate_type = values.get("type")
         command = values.get("command")

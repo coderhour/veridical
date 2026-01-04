@@ -32,6 +32,10 @@ class CommandRunner:
         start_time = time.monotonic()
         logger.debug(f"Executing command: {gate.command} (timeout: {gate.timeout}s)")
 
+        # The schema guarantees that command is not None for command-type gates.
+        # This assertion is for the type checker.
+        assert gate.command is not None
+
         try:
             # Create subprocess
             process = await asyncio.create_subprocess_shell(
