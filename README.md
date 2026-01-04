@@ -8,24 +8,44 @@ Veridical implements autonomous quality assurance loops that enforce high code q
 
 ## Installation
 
+**Note**: Veridical is currently in development and not yet published to PyPI.
+
+### For Development
+
+Clone the repository and install with uv:
+
+```bash
+git clone https://github.com/veridical/veridical.git
+cd veridical
+uv sync --all-extras
+```
+
+### For Users (Future)
+
+Once published, you'll be able to install via:
+
 ```bash
 uv add veridical
+# or
+pip install veridical
 ```
 
 ## Quick Start
+
+**Tip**: You can use `veri` as a shorter alias for `veridical`!
 
 ```bash
 # Initialize configuration
 veridical config init
 
 # Run quality verification locally
-veridical verify
+veri verify
 
-# Start an autonomous fix loop
-veridical run "Fix the login validation bug"
+# Start an autonomous task loop
+veri run "Fix the login validation bug"
 
 # Check status of active sessions
-veridical status
+veri status
 ```
 
 ## Configuration

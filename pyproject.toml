@@ -43,6 +43,7 @@ dev = [
 
 [project.scripts]
 veridical = "veridical.cli.main:app"
+veri = "veridical.cli.main:app"
 
 [project.urls]
 Homepage = "https://github.com/veridical/veridical"
