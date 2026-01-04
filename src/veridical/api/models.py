@@ -244,4 +244,4 @@ class ApprovalRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     """Request payload for sending a message to a session."""
 
-    message: str = Field(..., description="Message to send to the session")
+    prompt: str = Field(..., description="Prompt/message to send to the session")

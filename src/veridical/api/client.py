@@ -250,7 +250,7 @@ class JulesClient:
             session_id: ID of the session
             message: Message to send
         """
-        request = SendMessageRequest(message=message)
+        request = SendMessageRequest(prompt=message)
         await self._request_with_retry(
             "POST",
             f"/sessions/{session_id}:sendMessage",
