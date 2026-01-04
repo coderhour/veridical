@@ -150,21 +150,47 @@ class TestConfigLoading:
 class TestConfigTemplate:
     """Tests for configuration template generation."""
 
-    def test_get_template(self) -> None:
-        """Test getting config template."""
-        template = get_config_template()
+    def test_get_template_default(self) -> None:
+        """Test getting the default 'python' config template."""
+        template = get_config_template()  # Defaults to python
         assert "jules:" in template
         assert "supervisor:" in template
         assert "verifier:" in template
         assert "git:" in template
+        assert "quality_gates:" in template
+        assert "pytest" in template
 
-    def test_generate_template(self, temp_dir: Path) -> None:
-        """Test generating template file."""
+    def test_get_template_explicit_python(self) -> None:
+        """Test explicitly getting the 'python' config template."""
+        template = get_config_template("python")
+        assert "pytest" in template
+        assert "ruff" in template
+        assert "mypy" in template
+
+    def test_get_template_generic(self) -> None:
+        """Test getting the 'default' config template."""
+        template = get_config_template("default")
+        assert "quality_gates: []" in template
+
+    def test_get_template_not_found(self) -> None:
+        """Test requesting a non-existent template."""
+        with pytest.raises(ConfigurationError) as exc_info:
+            get_config_template("nonexistent")
+        assert "not found" in str(exc_info.value).lower()
+
+    def test_generate_template_default(self, temp_dir: Path) -> None:
+        """Test generating the default template file."""
         output = temp_dir / ".veridical.yaml"
         result = generate_config_template(output)
         assert result == output
         assert output.exists()
-        assert "jules:" in output.read_text()
+        assert "pytest" in output.read_text()
+
+    def test_generate_template_with_name(self, temp_dir: Path) -> None:
+        """Test generating a template by name."""
+        output = temp_dir / ".veridical.yaml"
+        generate_config_template(output, template="default")
+        assert "quality_gates: []" in output.read_text()
 
     def test_generate_template_exists(self, temp_dir: Path) -> None:
         """Test generating template when file exists."""
