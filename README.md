@@ -93,8 +93,11 @@ openspec archive fix-password-validation
 ### Command Reference
 
 ```bash
-# Initialize configuration
+# Initialize configuration for a Python project (default)
 veridical config init
+
+# Initialize configuration for a Node.js project
+veridical config init --template nodejs
 
 # Run an autonomous task loop
 veri run "Fix the login validation bug"
@@ -138,33 +141,23 @@ veri run "Continue authentication implementation" -s abc123
 
 ## Configuration
 
-Create a `.veridical.yaml` file in your project root:
+Create a `.veridical.yaml` file in your project root using `veridical config init`. You can specify a template for your project's language:
 
-```yaml
-jules:
-  api_base_url: https://jules.googleapis.com/v1alpha
-  poll_interval: 30
-  poll_timeout: 3600
-  auto_approve_plans: true
+```bash
+# For Python (default)
+veridical config init
 
-supervisor:
-  max_iterations: 10
-  max_consecutive_failures: 3
-  stagnation_threshold: 3
+# For Node.js
+veridical config init --template nodejs
 
-verifier:
-  quality_gates:
-    - name: pytest
-      command: pytest
-    - name: ruff
-      command: ruff check src/
-    - name: mypy
-      command: mypy src/
+# For Elixir
+veridical config init --template elixir
 
-git:
-  base_branch: main
-  branch_prefix: veridical/iter-
+# For Java
+veridical config init --template java
 ```
+
+This will generate a configuration file with sensible defaults for the chosen language. For example, the `nodejs` template will include quality gates for `npm test`, `eslint`, and `prettier`.
 
 ### Environment Variables
 

@@ -5,7 +5,7 @@ from typing import Any
 
 import yaml
 
-from veridical.config.defaults import get_config_template
+from veridical.config.defaults import TemplateType, get_config_template
 from veridical.config.schema import VeridicalConfig
 from veridical.exceptions import ConfigurationError
 
@@ -108,12 +108,18 @@ def load_config(
     return config
 
 
-def generate_config_template(output_path: Path, *, force: bool = False) -> Path:
+def generate_config_template(
+    output_path: Path,
+    *,
+    force: bool = False,
+    template: TemplateType = TemplateType.PYTHON,
+) -> Path:
     """Generate a configuration template file.
 
     Args:
         output_path: Path to write the template to.
         force: If True, overwrite existing file.
+        template: The template type to generate.
 
     Returns:
         Path to the generated file.
@@ -127,6 +133,6 @@ def generate_config_template(output_path: Path, *, force: bool = False) -> Path:
             details="Use --force to overwrite",
         )
 
-    template = get_config_template()
-    output_path.write_text(template)
+    template_content = get_config_template(template)
+    output_path.write_text(template_content)
     return output_path

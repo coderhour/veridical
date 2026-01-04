@@ -3,8 +3,16 @@
 from pathlib import Path
 
 import pytest
+import yaml
 
-from veridical.config.defaults import get_config_template
+from veridical.config.defaults import (
+    ELIXIR_CONFIG_TEMPLATE,
+    JAVA_CONFIG_TEMPLATE,
+    NODEJS_CONFIG_TEMPLATE,
+    PYTHON_CONFIG_TEMPLATE,
+    TemplateType,
+    get_config_template,
+)
 from veridical.config.loader import (
     find_config_file,
     generate_config_template,
@@ -150,13 +158,28 @@ class TestConfigLoading:
 class TestConfigTemplate:
     """Tests for configuration template generation."""
 
-    def test_get_template(self) -> None:
-        """Test getting config template."""
+    @pytest.mark.parametrize(
+        "template_type, expected_content",
+        [
+            (TemplateType.PYTHON, PYTHON_CONFIG_TEMPLATE),
+            (TemplateType.NODEJS, NODEJS_CONFIG_TEMPLATE),
+            (TemplateType.ELIXIR, ELIXIR_CONFIG_TEMPLATE),
+            (TemplateType.JAVA, JAVA_CONFIG_TEMPLATE),
+        ],
+    )
+    def test_get_template(
+        self,
+        template_type: TemplateType,
+        expected_content: str,
+    ) -> None:
+        """Test getting specific config templates."""
+        template = get_config_template(template_type)
+        assert template == expected_content
+
+    def test_get_template_default(self) -> None:
+        """Test getting default config template (Python)."""
         template = get_config_template()
-        assert "jules:" in template
-        assert "supervisor:" in template
-        assert "verifier:" in template
-        assert "git:" in template
+        assert template == PYTHON_CONFIG_TEMPLATE
 
     def test_generate_template(self, temp_dir: Path) -> None:
         """Test generating template file."""
@@ -165,6 +188,53 @@ class TestConfigTemplate:
         assert result == output
         assert output.exists()
         assert "jules:" in output.read_text()
+
+    @pytest.mark.parametrize(
+        "template_type, expected_gates, expected_title",
+        [
+            (
+                TemplateType.PYTHON,
+                ["pytest", "ruff-check", "ruff-format", "mypy"],
+                "(Python)",
+            ),
+            (
+                TemplateType.NODEJS,
+                ["npm-test", "eslint", "prettier"],
+                "(Node.js)",
+            ),
+            (
+                TemplateType.ELIXIR,
+                ["mix-test", "mix-credo", "mix-format", "mix-dialyzer"],
+                "(Elixir)",
+            ),
+            (
+                TemplateType.JAVA,
+                ["gradle-test", "gradle-checkstyle"],
+                "(Java with Gradle)",
+            ),
+        ],
+    )
+    def test_generate_specific_template(
+        self,
+        temp_dir: Path,
+        template_type: TemplateType,
+        expected_gates: list[str],
+        expected_title: str,
+    ) -> None:
+        """Test generating specific language template files."""
+        output = temp_dir / f".veridical.{template_type.value}.yaml"
+        generate_config_template(output, template=template_type)
+
+        assert output.exists()
+        content = output.read_text()
+        assert f"# Veridical Configuration {expected_title}" in content
+
+        # Verify quality gates
+        config_data = yaml.safe_load(content)
+        gate_names = [
+            gate["name"] for gate in config_data.get("verifier", {}).get("quality_gates", [])
+        ]
+        assert gate_names == expected_gates
 
     def test_generate_template_exists(self, temp_dir: Path) -> None:
         """Test generating template when file exists."""
