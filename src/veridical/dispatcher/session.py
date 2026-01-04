@@ -1,5 +1,6 @@
 """Session management for the dispatcher."""
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from veridical.api.models import (
@@ -10,6 +11,7 @@ from veridical.api.models import (
     SourceContext,
 )
 from veridical.dispatcher.prompt import PromptBuilder
+from veridical.synchronizer.git import GitWrapper
 
 if TYPE_CHECKING:
     from veridical.api.client import JulesClient
@@ -29,6 +31,7 @@ class Dispatcher:
         self,
         config: "VeridicalConfig",
         api_client: "JulesClient",
+        repo_path: Path,
         *,
         prompt_builder: PromptBuilder | None = None,
     ) -> None:
@@ -37,10 +40,13 @@ class Dispatcher:
         Args:
             config: Veridical configuration
             api_client: Jules API client
+            repo_path: Path to the repository root
             prompt_builder: Optional custom prompt builder
         """
         self.config = config
         self.api_client = api_client
+        self.repo_path = repo_path
+        self.git = GitWrapper(repo_path)
         self.prompt_builder = prompt_builder or PromptBuilder()
 
     def build_prompt(
@@ -66,7 +72,7 @@ class Dispatcher:
         self,
         prompt: str,
         *,
-        source: str,
+        source: str | None = None,
         branch: str | None = None,
     ) -> SessionResponse:
         """Create a new Jules session.
@@ -74,19 +80,28 @@ class Dispatcher:
         Args:
             prompt: Complete prompt to send
             source: Source identifier (e.g., 'sources/github/owner/repo')
-            branch: Git branch to work from
+            branch: Git branch to work from. If None, uses config default or auto-detected.
 
         Returns:
             Created session information
         """
-        request = CreateSessionRequest(
-            prompt=prompt,
-            source_context=SourceContext(
+        target_branch = branch or self.config.git.base_branch
+
+        if source:
+            source_context = SourceContext(
                 source=source,
                 github_repo_context=GitHubRepoContext(
-                    starting_branch=branch or self.config.git.base_branch,
+                    starting_branch=target_branch,
                 ),
-            ),
+            )
+        else:
+            # Auto-detect from local git config
+            remote_url = self.git.get_remote_url()
+            source_context = SourceContext.from_remote_url(remote_url, target_branch)
+
+        request = CreateSessionRequest(
+            prompt=prompt,
+            source_context=source_context,
             automation_mode=AutomationMode.AUTO_CREATE_PR,
             require_plan_approval=not self.config.jules.auto_approve_plans,
         )

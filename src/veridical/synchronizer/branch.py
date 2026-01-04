@@ -87,12 +87,35 @@ class BranchManager:
         Returns:
             Commit hash after merge
         """
+        return self.safe_merge(branch_name)
+
+    def safe_merge(self, branch_name: str) -> str:
+        """Merge an iteration branch to main with conflict safety.
+
+        Args:
+            branch_name: Name of the branch to merge
+
+        Returns:
+            Commit hash after merge
+
+        Raises:
+            SynchronizationError: If merge conflicts occur
+        """
         # Checkout main
         self.git.checkout(self.base_branch)
 
-        # Merge the branch
-        # Note: This is a simple fast-forward or merge commit
-        # In full implementation, we might want more control
-        self.git._run("merge", branch_name, "--no-ff", "-m", f"Merge {branch_name}")
+        try:
+            # Merge the branch
+            self.git._run(
+                "merge",
+                branch_name,
+                "--no-ff",
+                "-m",
+                f"Merge {branch_name}",
+            )
+        except Exception:
+            # Abort merge if it failed (e.g., conflicts)
+            self.git._run("merge", "--abort", check=False)
+            raise
 
         return self.git.get_current_commit()

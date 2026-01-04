@@ -236,3 +236,23 @@ class JulesClient:
         data = response.json()
         activities = data.get("activities", [])
         return [ActivityEntry.model_validate(a) for a in activities]
+
+    async def download_patch(self, session_id: str) -> str:
+        """Download patch for a session.
+
+        Args:
+            session_id: ID of the session
+
+        Returns:
+            Unified diff content
+        """
+        response = await self._request_with_retry(
+            "GET",
+            f"/sessions/{session_id}/diff",
+        )
+        # Check Content-Type to handle JSON-wrapped diff or raw text
+        content_type = response.headers.get("content-type", "")
+        if "application/json" in content_type:
+            data = response.json()
+            return str(data.get("diff", ""))
+        return response.text

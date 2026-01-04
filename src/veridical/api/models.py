@@ -56,6 +56,46 @@ class SourceContext(BaseModel):
 
         populate_by_name = True
 
+    @classmethod
+    def from_remote_url(cls, remote_url: str, branch: str = "main") -> "SourceContext":
+        """Create SourceContext from a git remote URL.
+
+        Handles both HTTPS and SSH formats:
+        - https://github.com/owner/repo.git
+        - git@github.com:owner/repo.git
+
+        Args:
+            remote_url: Git remote URL
+            branch: Starting branch name
+
+        Returns:
+            SourceContext instance
+
+        Raises:
+            ValueError: If URL format is invalid or not GitHub
+        """
+        url = remote_url.removesuffix(".git")
+
+        if "github.com" not in url:
+            raise ValueError(f"Only GitHub repos are supported: {remote_url}")
+
+        if url.startswith("https://"):
+            # https://github.com/owner/repo
+            path = url.split("github.com/")[-1]
+        elif "git@" in url:
+            # git@github.com:owner/repo
+            path = url.split(":")[-1]
+        else:
+            raise ValueError(f"Unsupported URL format: {remote_url}")
+
+        owner, repo = path.split("/")[-2:]  # Handle trailing slashes if any
+        source = f"sources/github/{owner}/{repo}"
+
+        return cls(
+            source=source,
+            github_repo_context=GitHubRepoContext(starting_branch=branch),
+        )
+
 
 class CreateSessionRequest(BaseModel):
     """Request payload for creating a new Jules session."""

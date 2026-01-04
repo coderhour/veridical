@@ -1,0 +1,105 @@
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
+import pytest
+
+from veridical.api.client import JulesClient
+from veridical.synchronizer.branch import BranchManager
+from veridical.synchronizer.patch import Synchronizer
+
+
+@pytest.mark.unit
+class TestJulesClientPatch:
+    @pytest.mark.asyncio
+    async def test_download_patch_text(self, respx_mock) -> None:
+        client = JulesClient(api_key="test")
+        session_id = "sess_123"
+        diff_content = "diff --git a/foo.py b/foo.py\n..."
+
+        respx_mock.get(f"https://jules.googleapis.com/v1alpha/sessions/{session_id}/diff").mock(
+            return_value=httpx.Response(200, text=diff_content)
+        )
+
+        async with client:
+            result = await client.download_patch(session_id)
+            assert result == diff_content
+
+    @pytest.mark.asyncio
+    async def test_download_patch_json(self, respx_mock) -> None:
+        client = JulesClient(api_key="test")
+        session_id = "sess_123"
+        diff_content = "diff --git a/foo.py b/foo.py\n..."
+
+        respx_mock.get(f"https://jules.googleapis.com/v1alpha/sessions/{session_id}/diff").mock(
+            return_value=httpx.Response(200, json={"diff": diff_content})
+        )
+
+        async with client:
+            result = await client.download_patch(session_id)
+            assert result == diff_content
+
+
+@pytest.mark.unit
+class TestSynchronizerLogic:
+    @pytest.mark.asyncio
+    async def test_apply_session_patch(self) -> None:
+        with (
+            patch("veridical.synchronizer.patch.GitWrapper"),
+            patch("veridical.synchronizer.patch.BranchManager"),
+            patch("veridical.synchronizer.patch.PatchApplier") as MockApplier,
+        ):
+            mock_applier = MockApplier.return_value
+            mock_applier.apply_patch.return_value = MagicMock(success=True)
+
+            config = MagicMock()
+            config.git.base_branch = "main"
+
+            synchronizer = Synchronizer(config, Path("/tmp"))
+
+            client = MagicMock()
+            client.download_patch = AsyncMock(return_value="raw_diff")
+
+            result = await synchronizer.apply_session_patch(client, "sess_1")
+
+            client.download_patch.assert_awaited_once_with("sess_1")
+            mock_applier.apply_patch.assert_called_once_with("raw_diff")
+            assert result.success
+
+
+@pytest.mark.unit
+class TestBranchManager:
+    def test_safe_merge_success(self) -> None:
+        with patch("veridical.synchronizer.branch.GitWrapper") as MockGit:
+            mock_git = MockGit.return_value
+            mock_git.get_current_commit.return_value = "hash123"
+
+            manager = BranchManager(Path("/tmp"))
+            hash = manager.safe_merge("iter-1")
+
+            assert hash == "hash123"
+            mock_git._run.assert_any_call("merge", "iter-1", "--no-ff", "-m", "Merge iter-1")
+
+    def test_safe_merge_conflict(self) -> None:
+        with patch("veridical.synchronizer.branch.GitWrapper") as MockGit:
+            mock_git = MockGit.return_value
+
+            # Simulate failure on merge
+            # 1. merge (fails)
+            # 2. merge --abort
+            mock_git._run.side_effect = [Exception("Conflict"), MagicMock()]
+
+            manager = BranchManager(Path("/tmp"))
+
+            try:
+                manager.safe_merge("iter-1")
+            except Exception as e:
+                assert str(e) == "Conflict"
+                # Verify calls
+                assert mock_git._run.call_count == 2
+                assert mock_git._run.call_args_list[0][0][0] == "merge"
+                assert mock_git._run.call_args_list[1][0][0] == "merge"
+                mock_git.checkout.assert_called()
+                return
+
+            pytest.fail("Did not raise Exception")

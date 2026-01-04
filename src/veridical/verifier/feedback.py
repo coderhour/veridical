@@ -1,7 +1,5 @@
 """Error summarization for feedback generation."""
 
-import re
-
 from veridical.models.result import GateResult, VerificationResult
 
 
@@ -60,61 +58,86 @@ class FeedbackGenerator:
         # Prioritize error output
         content = gate.error_output or gate.output
 
-        # Extract relevant parts
-        extracted = self._extract_errors(content)
-        lines.append(extracted)
+        # Compress output
+        compressed = self.compress_log_output(content)
+        lines.append(compressed)
 
         return "\n".join(lines)
 
-    def _extract_errors(self, output: str) -> str:
-        """Extract error-relevant content from command output.
-
-        Prioritizes:
-        1. Stack traces
-        2. Error messages
-        3. Failed test summaries
+    def identify_error_lines(self, output: str) -> list[int]:
+        """Identify line numbers containing potential errors.
 
         Args:
-            output: Raw command output
+            output: multi-line string
 
         Returns:
-            Extracted relevant content
+            List of 0-based line indices
+        """
+        error_keywords = {"error", "fail", "exception", "fatal", "panic", "traceback"}
+        lines = output.splitlines()
+        error_indices = []
+        for i, line in enumerate(lines):
+            # Case insensitive check
+            if any(kw in line.lower() for kw in error_keywords):
+                error_indices.append(i)
+        return error_indices
+
+    def compress_log_output(self, output: str, context_lines: int = 5) -> str:
+        """Compress log output by retaining errors and context.
+
+        Strategy:
+        1. Find all lines with keywords.
+        2. Keep N lines before/after each matching line.
+        3. Keep first N lines (head) and last N lines (tail).
+        4. Join segments with "..."
+
+        Args:
+            output: Raw log output
+            context_lines: Number of context lines to keep around errors
+
+        Returns:
+            Compressed output
         """
         if not output:
             return "(no output)"
 
-        # Look for common error patterns
-        patterns = [
-            # Python traceback
-            r"Traceback \(most recent call last\):.*?(?=\n\n|\Z)",
-            # Pytest failures
-            r"FAILED.*?(?=\n\n|\Z)",
-            # Ruff/lint errors
-            r"error\[.*?\]:.*",
-            # Type errors
-            r"error:.*",
-            # General errors
-            r"Error:.*",
-        ]
+        lines = output.splitlines()
+        total_lines = len(lines)
 
-        extracted_parts: list[str] = []
+        # If short enough, return all
+        if total_lines <= 50:
+            return output
 
-        for pattern in patterns:
-            matches = re.findall(pattern, output, re.DOTALL | re.IGNORECASE)
-            extracted_parts.extend(matches)
+        keep_indices = set()
 
-        if extracted_parts:
-            # Deduplicate and join
-            seen: set[str] = set()
-            unique_parts = []
-            for part in extracted_parts:
-                normalized = part.strip()
-                if normalized and normalized not in seen:
-                    seen.add(normalized)
-                    unique_parts.append(normalized)
+        # Always keep head and tail
+        head_lines = 10
+        tail_lines = 10
 
-            return "\n".join(unique_parts[:10])  # Limit to 10 errors
+        for i in range(min(head_lines, total_lines)):
+            keep_indices.add(i)
+        for i in range(max(0, total_lines - tail_lines), total_lines):
+            keep_indices.add(i)
 
-        # Fallback: return last 50 lines
-        lines = output.strip().split("\n")
-        return "\n".join(lines[-50:])
+        # Find errors
+        error_indices = self.identify_error_lines(output)
+
+        # Add context around errors
+        for idx in error_indices:
+            start = max(0, idx - context_lines)
+            end = min(total_lines, idx + context_lines + 1)
+            for i in range(start, end):
+                keep_indices.add(i)
+
+        # Construct output
+        sorted_indices = sorted(keep_indices)
+        result = []
+        last_idx = -1
+
+        for idx in sorted_indices:
+            if last_idx != -1 and idx > last_idx + 1:
+                result.append("...")
+            result.append(lines[idx])
+            last_idx = idx
+
+        return "\n".join(result)

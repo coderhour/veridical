@@ -168,3 +168,15 @@ class GitWrapper:
         """
         result = self._run("status", "--porcelain")
         return not result.stdout.strip()
+
+    def get_remote_url(self, remote: str = "origin") -> str:
+        """Get the URL of a git remote.
+
+        Args:
+            remote: Name of the remote (default: "origin")
+
+        Returns:
+            Remote URL
+        """
+        result = self._run("remote", "get-url", remote)
+        return result.stdout.strip()

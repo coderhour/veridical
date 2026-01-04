@@ -9,6 +9,7 @@ from veridical.synchronizer.branch import BranchManager
 from veridical.synchronizer.git import GitWrapper
 
 if TYPE_CHECKING:
+    from veridical.api.client import JulesClient
     from veridical.config.schema import VeridicalConfig
 
 
@@ -110,6 +111,23 @@ class Synchronizer:
             Name of the created branch
         """
         return self.branch_manager.create_iteration_branch(iteration)
+
+    async def apply_session_patch(
+        self,
+        client: "JulesClient",
+        session_id: str,
+    ) -> PatchResult:
+        """Fetch and apply patch from a session.
+
+        Args:
+            client: API client
+            session_id: Session ID
+
+        Returns:
+            Patch application result
+        """
+        patch_data = await client.download_patch(session_id)
+        return self.apply_patch(patch_data)
 
     def apply_patch(self, patch_data: str) -> PatchResult:
         """Apply a patch to the current branch.
