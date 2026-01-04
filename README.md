@@ -199,6 +199,24 @@ veridical config init --template elixir
 
 # For Java
 veridical config init --template java
+
+# For Go
+veridical config init --template go
+
+# For Rust
+veridical config init --template rust
+
+# For TypeScript
+veridical config init --template typescript
+
+# For Ruby
+veridical config init --template ruby
+
+# For PHP
+veridical config init --template php
+
+# For C#/.NET
+veridical config init --template dotnet
 ```
 
 This will generate a configuration file with sensible defaults for the chosen language. For example, the `nodejs` template will include quality gates for `npm test`, `eslint`, and `prettier`.
