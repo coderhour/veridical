@@ -7,7 +7,7 @@ import typer
 from rich.console import Console
 from rich.syntax import Syntax
 
-from veridical.config.defaults import get_config_template
+from veridical.config.defaults import ProjectType, get_config_template
 from veridical.config.loader import generate_config_template, load_config
 from veridical.exceptions import ConfigurationError
 
@@ -72,6 +72,15 @@ def config_init(
             help="Overwrite existing file",
         ),
     ] = False,
+    project_type: Annotated[
+        ProjectType | None,
+        typer.Option(
+            "--type",
+            "-t",
+            help="Project type (e.g., python, javascript)",
+            case_sensitive=False,
+        ),
+    ] = None,
 ) -> None:
     """Create a configuration template file.
 
@@ -79,7 +88,11 @@ def config_init(
     and sensible defaults.
     """
     try:
-        path = generate_config_template(output, force=force)
+        path = generate_config_template(
+            output,
+            force=force,
+            project_type=project_type,
+        )
         console.print(f"[green]Created configuration file: {path}[/green]")
         console.print("[dim]Edit this file to customize your settings.[/dim]")
     except ConfigurationError as e:
@@ -88,11 +101,19 @@ def config_init(
 
 
 @config_app.command("template")
-def config_template() -> None:
+def config_template(
+    project_type: Annotated[
+        ProjectType,
+        typer.Argument(
+            help="Project type to show template for",
+            case_sensitive=False,
+        ),
+    ] = "python",
+) -> None:
     """Print the configuration template to stdout.
 
     Useful for piping to a file or reviewing the format.
     """
-    template = get_config_template()
+    template = get_config_template(project_type)
     syntax = Syntax(template, "yaml", theme="monokai", line_numbers=True)
     console.print(syntax)

@@ -5,7 +5,8 @@ from typing import Any
 
 import yaml
 
-from veridical.config.defaults import get_config_template
+from veridical.config.defaults import ProjectType, get_config_template
+from veridical.config.project_type import detect_project_type
 from veridical.config.schema import VeridicalConfig
 from veridical.exceptions import ConfigurationError
 
@@ -108,25 +109,40 @@ def load_config(
     return config
 
 
-def generate_config_template(output_path: Path, *, force: bool = False) -> Path:
+def generate_config_template(
+    output_path: Path,
+    *,
+    force: bool = False,
+    project_type: ProjectType | None = None,
+) -> Path:
     """Generate a configuration template file.
 
     Args:
         output_path: Path to write the template to.
         force: If True, overwrite existing file.
+        project_type: The type of project to generate a config for.
 
     Returns:
         Path to the generated file.
 
     Raises:
-        ConfigurationError: If file exists and force is False.
+        ConfigurationError: If file exists and force is False, or if project
+                            type cannot be determined.
     """
     if output_path.exists() and not force:
         raise ConfigurationError(
             f"Configuration file already exists: {output_path}",
             details="Use --force to overwrite",
         )
+    if project_type is None:
+        detected_type = detect_project_type(output_path.parent)
+        if detected_type is None:
+            raise ConfigurationError(
+                "Could not automatically detect project type.",
+                details="Please specify the project type with --type",
+            )
+        project_type = detected_type
 
-    template = get_config_template()
+    template = get_config_template(project_type)
     output_path.write_text(template)
     return output_path
