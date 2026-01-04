@@ -40,6 +40,10 @@ dev = [
     "respx>=0.21.0",
     "types-PyYAML>=6.0.0",
 ]
+llm = [
+    "openai>=1.0.0",
+    "tiktoken>=0.7.0",
+]
 
 [project.scripts]
 veridical = "veridical.cli.main:app"

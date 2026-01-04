@@ -136,6 +136,24 @@ class GitConfig(BaseModel):
     )
 
 
+class LocalLLMConfig(BaseModel):
+    """Configuration for local LLM endpoint."""
+
+    base_url: str = Field(
+        "http://localhost:11434/v1",
+        description="Base URL for the OpenAI-compatible API",
+    )
+    model: str = Field(
+        "llama3",
+        description="Model name to use for analysis",
+    )
+    timeout: int = Field(
+        120,
+        ge=10,
+        description="Request timeout in seconds",
+    )
+
+
 class VeridicalConfig(BaseSettings):
     """Root configuration for Veridical.
 
@@ -157,3 +175,6 @@ class VeridicalConfig(BaseSettings):
     supervisor: SupervisorConfig = Field(default_factory=SupervisorConfig)
     verifier: VerifierConfig = Field(default_factory=VerifierConfig)
     git: GitConfig = Field(default_factory=GitConfig)
+    local_llm: LocalLLMConfig | None = Field(
+        default=None, description="Configuration for local LLM endpoint (optional)"
+    )
