@@ -26,6 +26,7 @@ def run_supervisor(
     max_iterations: int | None,
     dry_run: bool,
     config_path: Path | None,
+    session_id: str | None,
 ) -> None:
     """Async wrapper for running the supervisor."""
     try:
@@ -62,10 +63,13 @@ def run_supervisor(
                     )
                     return
 
-                logger.info(f"Starting supervisor loop for task: {task}")
+                if session_id:
+                    logger.info(f"Resuming session {session_id} for task: {task}")
+                else:
+                    logger.info(f"Starting supervisor loop for task: {task}")
 
                 # Run loop
-                result = await supervisor.run(task)
+                result = await supervisor.run(task, session_id=session_id)
 
                 # Report results
                 style = "green" if result.success else "red"
@@ -135,11 +139,19 @@ def run(
             help="Path to configuration file",
         ),
     ] = None,
+    session_id: Annotated[
+        str | None,
+        typer.Option(
+            "--session-id",
+            "-s",
+            help="Resume an existing Jules session instead of creating a new one",
+        ),
+    ] = None,
 ) -> None:
     """Start an autonomous task loop with Jules.
 
     The supervisor will:
-    1. Dispatch the task to Jules
+    1. Dispatch the task to Jules (or resume existing session with --session-id)
     2. Poll for completion
     3. Sync patches locally
     4. Run quality gates
@@ -152,6 +164,8 @@ def run(
         veridical run "Add user profile page with avatar upload"
         veridical run "Refactor the authentication module"
         veridical run "Add comprehensive tests for the API client"
+        veridical run "Continue the task" --session-id abc123
+        veridical run "Continue the task" -s abc123
     """
     if dry_run:
         console.print("[yellow]Dry run mode - no API calls will be made[/yellow]")
@@ -166,9 +180,13 @@ def run(
             console.print("[yellow]Aborted. Push your changes first with: git push[/yellow]")
             raise typer.Exit(code=0)
 
-    console.print(f"[bold]Starting autonomous task:[/bold] {task}")
+    if session_id:
+        console.print(f"[bold]Resuming session:[/bold] {session_id}")
+        console.print(f"[bold]Task:[/bold] {task}")
+    else:
+        console.print(f"[bold]Starting autonomous task:[/bold] {task}")
 
     if max_iterations:
         console.print(f"[dim]Max iterations: {max_iterations}[/dim]")
 
-    run_supervisor(task, max_iterations, dry_run, config_path)
+    run_supervisor(task, max_iterations, dry_run, config_path, session_id)

@@ -79,7 +79,7 @@ class Supervisor:
         logger.info(f"Transitioning: {self._state} -> {new_state}")
         self._state = new_state
 
-    async def run(self, task_description: str) -> LoopResult:
+    async def run(self, task_description: str, session_id: str | None = None) -> LoopResult:
         """Run the supervisor loop for a task.
 
         This is the main entry point for executing an autonomous
@@ -87,6 +87,7 @@ class Supervisor:
 
         Args:
             task_description: Description of the task to perform
+            session_id: Optional session ID to resume instead of creating new session
 
         Returns:
             Result of the loop execution
@@ -104,17 +105,27 @@ class Supervisor:
             iteration = self._circuit_breaker.iteration_count
             logger.info(f"--- Starting Iteration {iteration} ---")
 
-            # 1. DISPATCHING
-            self._transition_to(SupervisorState.DISPATCHING)
-            prompt = self.dispatcher.build_prompt(task_description, error_context)
+            # Determine the session to use
+            current_session_id: str
 
-            # Create session (auto-detect source)
-            session = await self.dispatcher.create_session(prompt, title=task_description)
+            # 1. DISPATCHING (skip if resuming on first iteration)
+            if session_id and iteration == 1:
+                # Resume existing session - skip dispatching
+                logger.info(f"Resuming existing session: {session_id}")
+                current_session_id = session_id
+            else:
+                # Normal dispatching flow
+                self._transition_to(SupervisorState.DISPATCHING)
+                prompt = self.dispatcher.build_prompt(task_description, error_context)
+
+                # Create session (auto-detect source)
+                session = await self.dispatcher.create_session(prompt, title=task_description)
+                current_session_id = session.session_id
 
             # 2. POLLING
             self._transition_to(SupervisorState.POLLING)
             try:
-                poll_result = await self.poller.wait_for_completion(session.session_id)
+                poll_result = await self.poller.wait_for_completion(current_session_id)
             except TimeoutError:
                 self._transition_to(SupervisorState.FAILED)
                 return LoopResult.failure_result(
@@ -125,7 +136,7 @@ class Supervisor:
 
             if poll_result.final_state == SessionState.FAILED:
                 self._circuit_breaker.record_failure()
-                error_context = f"Jules session {session.session_id} failed"
+                error_context = f"Jules session {current_session_id} failed"
                 continue
 
             # 3. SYNCING
@@ -134,7 +145,7 @@ class Supervisor:
 
             patch_result = await self.synchronizer.apply_session_patch(
                 self.client,
-                session.session_id,
+                current_session_id,
             )
 
             self._circuit_breaker.record_diff_hash(patch_result.diff_hash)

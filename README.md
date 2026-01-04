@@ -99,12 +99,44 @@ veridical config init
 # Initialize configuration for a Node.js project
 veridical config init --template nodejs
 
+# Run an autonomous task loop
+veri run "Fix the login validation bug"
+
+# Resume an existing Jules session (useful if interrupted or timed out)
+veri run "Continue the task" --session-id abc123def456
+# Or use the shortcut:
+veri run "Continue the task" -s abc123def456
+
 # Run quality verification locally
 # (Runs pytest, ruff, etc. defined in .veridical.yaml)
 veri verify
 
 # Check status of active sessions
 veri status
+```
+
+#### Session Resumption
+
+The `--session-id` / `-s` option allows you to resume an existing Jules session instead of creating a new one. This is useful when:
+
+- A session was interrupted (network failure, timeout, user abort)
+- A session completed but local verification failed and you want to retry
+- You want to continue iterating on an existing session
+
+**How it works:**
+- On the first iteration, Veridical skips creating a new session and goes directly to polling the provided session ID
+- If verification fails and the loop continues, subsequent iterations create new sessions as normal
+- The session ID can be found in the output of `veri status` or from the Jules console
+
+**Example:**
+```bash
+# Start a task
+veri run "Implement user authentication"
+# Session abc123 created...
+# (interrupted or failed)
+
+# Resume the same session later
+veri run "Continue authentication implementation" -s abc123
 ```
 
 ## Configuration

@@ -96,6 +96,18 @@ class GitWrapper:
         )
         return bool(result.stdout.strip())
 
+    def create_branch(self, branch_name: str, checkout: bool = True) -> None:
+        """Create a new branch.
+
+        Args:
+            branch_name: Name of the new branch
+            checkout: Whether to checkout the new branch
+        """
+        if checkout:
+            self._run("checkout", "-b", branch_name)
+        else:
+            self._run("branch", branch_name)
+
     def checkout(self, ref: str, *, create: bool = False) -> None:
         """Checkout a branch or commit.
 
