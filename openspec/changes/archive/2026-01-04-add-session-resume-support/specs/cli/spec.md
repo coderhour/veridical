@@ -2,7 +2,7 @@
 
 ## MODIFIED Requirements
 
-### Requirement: Run Subcommand
+### Requirement: Fix Subcommand
 
 The `run` subcommand SHALL support resuming an existing Jules session.
 

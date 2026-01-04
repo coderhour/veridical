@@ -43,20 +43,19 @@ THEN it SHALL display the package version from pyproject.toml
 
 ### Requirement: Fix Subcommand
 
-The system SHALL provide a `fix` subcommand to initiate the quality loop.
+The `run` subcommand SHALL support resuming an existing Jules session.
 
-#### Scenario: Fix Command Interface
+#### Scenario: Run Command Session Resume Option
 
-WHEN running `veridical fix "Fix the login bug"`
-THEN it SHALL accept a task description as a positional argument
-AND it SHALL start the supervisor loop
+WHEN running `veri run "task" --session-id <id>` or `veri run "task" -s <id>`
+THEN it SHALL accept the `--session-id` / `-s` option as an optional string parameter
+AND it SHALL pass the session ID to the supervisor for resumption
+AND it SHALL skip creating a new session for the first iteration
 
-#### Scenario: Fix Command Options
+#### Scenario: Run Command Without Session ID
 
-WHEN running `veridical fix`
-THEN it SHALL accept `--max-iterations` to limit loop iterations
-AND it SHALL accept `--dry-run` to simulate without API calls
-AND it SHALL accept `--verbose` for detailed output
+WHEN running `veri run "task"` without `--session-id`
+THEN behavior SHALL remain unchanged (create a new session)
 
 ### Requirement: Verify Subcommand
 
@@ -99,4 +98,28 @@ AND it SHALL indicate which values came from defaults vs config file
 WHEN running `veridical config init`
 THEN it SHALL create a `.veridical.yaml` template in the current directory
 AND it SHALL NOT overwrite an existing file without `--force`
+
+#### Scenario: Config Init with Template
+
+WHEN running `veridical config init --template <name>`
+THEN it SHALL accept `--template` or `-t` option with values: `python`, `nodejs`, `elixir`, `java`
+AND it SHALL generate a language-specific configuration template
+AND the template SHALL include appropriate quality gates for the specified language
+
+#### Scenario: Config Init Default Template
+
+WHEN running `veridical config init` without `--template`
+THEN it SHALL default to `python` template for backward compatibility
+
+#### Scenario: Config Init Invalid Template
+
+WHEN running `veridical config init --template unknown`
+THEN it SHALL display an error message listing valid template options
+AND it SHALL exit with code 1
+
+#### Scenario: Config Template Command with Template Option
+
+WHEN running `veridical config template --template <name>`
+THEN it SHALL print the language-specific template to stdout
+AND it SHALL accept the same template values as `config init`
 
