@@ -1,11 +1,12 @@
-"""Command execution for quality gates."""
-
 import asyncio
+import logging
 import time
 from pathlib import Path
 
 from veridical.config.schema import QualityGate
 from veridical.models.result import GateResult, GateStatus
+
+logger = logging.getLogger(__name__)
 
 
 class CommandRunner:
@@ -29,6 +30,7 @@ class CommandRunner:
             Result of running the gate
         """
         start_time = time.monotonic()
+        logger.debug(f"Executing command: {gate.command} (timeout: {gate.timeout}s)")
 
         try:
             # Create subprocess
@@ -63,6 +65,8 @@ class CommandRunner:
 
             # Determine status
             status = GateStatus.PASSED if exit_code == 0 else GateStatus.FAILED
+
+            logger.debug(f"Command '{gate.name}' finished with exit code {exit_code}")
 
             return GateResult(
                 name=gate.name,

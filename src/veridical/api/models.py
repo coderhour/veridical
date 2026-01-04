@@ -164,16 +164,64 @@ class SessionResponse(BaseModel):
         return self.name.split("/")[-1]
 
 
+class GitPatch(BaseModel):
+    """A patch in Git format."""
+
+    unidiff_patch: str | None = Field(None, alias="unidiffPatch")
+    base_commit_id: str | None = Field(None, alias="baseCommitId")
+    suggested_commit_message: str | None = Field(None, alias="suggestedCommitMessage")
+
+    class Config:
+        populate_by_name = True
+
+
+class ChangeSet(BaseModel):
+    """A set of changes to be applied to a source."""
+
+    git_patch: GitPatch | None = Field(None, alias="gitPatch")
+    source: str | None = Field(None, description="Format: sources/{source}")
+
+    class Config:
+        populate_by_name = True
+
+
+class Artifact(BaseModel):
+    """An artifact produced by an activity step."""
+
+    change_set: ChangeSet | None = Field(None, alias="changeSet")
+    media: dict[str, object] | None = None
+    bash_output: dict[str, object] | None = Field(None, alias="bashOutput")
+
+    class Config:
+        populate_by_name = True
+
+
 class ActivityEntry(BaseModel):
     """An activity log entry from a Jules session."""
 
-    timestamp: datetime = Field(..., description="When the activity occurred")
-    type: str = Field(..., description="Type of activity")
-    message: str = Field("", description="Activity message or content")
-    metadata: dict[str, object] = Field(
-        default_factory=dict,
-        description="Additional activity metadata",
-    )
+    name: str | None = None
+    id: str | None = None
+    create_time: datetime | None = Field(None, alias="createTime")
+    description: str | None = None
+    originator: str | None = None
+    artifacts: list[Artifact] = Field(default_factory=list)
+
+    # Union fields from discovery
+    agent_messaged: dict[str, object] | None = Field(None, alias="agentMessaged")
+    user_messaged: dict[str, object] | None = Field(None, alias="userMessaged")
+    plan_generated: dict[str, object] | None = Field(None, alias="planGenerated")
+    plan_approved: dict[str, object] | None = Field(None, alias="planApproved")
+    progress_updated: dict[str, object] | None = Field(None, alias="progressUpdated")
+    session_completed: dict[str, object] | None = Field(None, alias="sessionCompleted")
+    session_failed: dict[str, object] | None = Field(None, alias="sessionFailed")
+
+    class Config:
+        populate_by_name = True
+
+    @property
+    def timestamp(self) -> datetime | None:
+        """Alias for create_time to maintain backward compatibility if any."""
+        return self.create_time
 
 
 class ApprovalRequest(BaseModel):

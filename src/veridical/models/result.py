@@ -70,9 +70,6 @@ class GateStatus(str, Enum):
     ERROR = "error"
 
 
-from typing import Optional
-
-
 class GateResult(BaseModel):
     """Result of a single quality gate execution.
 
@@ -82,8 +79,8 @@ class GateResult(BaseModel):
 
     name: str = Field(..., description="Name of the quality gate")
     status: GateStatus = Field(..., description="Status of the gate execution")
-    command: Optional[str] = Field(None, description="Command that was executed")
-    exit_code: Optional[int] = Field(None, description="Exit code of the command")
+    command: str | None = Field(None, description="Command that was executed")
+    exit_code: int | None = Field(None, description="Exit code of the command")
     output: str = Field("", description="stdout from the command")
     error_output: str = Field("", description="stderr from the command")
     duration_seconds: float = Field(..., ge=0, description="Execution time in seconds")

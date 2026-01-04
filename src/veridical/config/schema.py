@@ -1,6 +1,6 @@
 """Configuration schema definitions using Pydantic."""
 
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field, root_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -13,12 +13,8 @@ class QualityGate(BaseModel):
     type: Literal["command", "task_completion"] = Field(
         "command", description="Type of the quality gate"
     )
-    command: Optional[str] = Field(
-        None, description="Command to execute for 'command' type gates"
-    )
-    path: Optional[str] = Field(
-        None, description="File path for 'task_completion' type gates"
-    )
+    command: str | None = Field(None, description="Command to execute for 'command' type gates")
+    path: str | None = Field(None, description="File path for 'task_completion' type gates")
     timeout: int = Field(300, ge=1, description="Timeout in seconds")
     required: bool = Field(True, description="Whether this gate must pass")
 
@@ -38,9 +34,7 @@ class QualityGate(BaseModel):
             if not path:
                 raise ValueError("`path` is required for 'task_completion' gate type")
             if command is not None:
-                raise ValueError(
-                    "`command` is not applicable for 'task_completion' gate type"
-                )
+                raise ValueError("`command` is not applicable for 'task_completion' gate type")
 
         return values
 

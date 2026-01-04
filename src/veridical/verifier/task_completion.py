@@ -1,4 +1,4 @@
-"""Task completion verification."""
+import logging
 import re
 import time
 from pathlib import Path
@@ -10,6 +10,8 @@ INCOMPLETE_TASK_RE = re.compile(r"^\s*-\s*\[\s\]\s+(.*)$", re.MULTILINE)
 
 # Keywords to ignore in incomplete task descriptions
 IGNORED_KEYWORDS = ["manual test", "integration test"]
+
+logger = logging.getLogger(__name__)
 
 
 def verify_task_completion(gate_name: str, tasks_file_path: Path) -> GateResult:
@@ -23,8 +25,10 @@ def verify_task_completion(gate_name: str, tasks_file_path: Path) -> GateResult:
         GateResult for the task completion check
     """
     start_time = time.monotonic()
+    logger.debug(f"Checking task completion in {tasks_file_path}")
 
     if not tasks_file_path.exists():
+        logger.warning(f"Tasks file not found: {tasks_file_path}")
         return GateResult(
             name=gate_name,
             status=GateStatus.ERROR,
@@ -41,6 +45,10 @@ def verify_task_completion(gate_name: str, tasks_file_path: Path) -> GateResult:
         for task in incomplete_tasks
         if not any(keyword in task.lower() for keyword in IGNORED_KEYWORDS)
     ]
+
+    logger.debug(
+        f"Found {len(incomplete_tasks)} total tasks, {len(actionable_incomplete)} actionable"
+    )
 
     if not actionable_incomplete:
         return GateResult(

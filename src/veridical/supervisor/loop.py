@@ -1,5 +1,4 @@
-"""Main supervisor control loop."""
-
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -16,6 +15,8 @@ from veridical.verifier.quality_gate import Verifier
 
 if TYPE_CHECKING:
     from veridical.config.schema import VeridicalConfig
+
+logger = logging.getLogger(__name__)
 
 
 class Supervisor:
@@ -75,6 +76,7 @@ class Supervisor:
         Args:
             new_state: Target state
         """
+        logger.info(f"Transitioning: {self._state} -> {new_state}")
         self._state = new_state
 
     async def run(self, task_description: str) -> LoopResult:
@@ -100,6 +102,7 @@ class Supervisor:
                 break
 
             iteration = self._circuit_breaker.iteration_count
+            logger.info(f"--- Starting Iteration {iteration} ---")
 
             # 1. DISPATCHING
             self._transition_to(SupervisorState.DISPATCHING)

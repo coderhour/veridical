@@ -1,4 +1,5 @@
 """Integration tests for the Verifier component."""
+
 from pathlib import Path
 
 import pytest

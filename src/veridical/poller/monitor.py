@@ -1,6 +1,7 @@
 """Session status monitoring and polling."""
 
 import asyncio
+import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -13,6 +14,8 @@ from veridical.poller.backoff import BackoffStrategy, ExponentialBackoff
 if TYPE_CHECKING:
     from veridical.api.client import JulesClient
     from veridical.config.schema import VeridicalConfig
+
+logger = logging.getLogger(__name__)
 
 
 class PollResult(BaseModel):
@@ -82,6 +85,8 @@ class Poller:
         started_at = datetime.now()
         poll_count = 0
 
+        logger.info(f"Polling session {session_id} for completion...")
+
         self.backoff.reset()
 
         while True:
@@ -98,6 +103,8 @@ class Poller:
             session = await self.api_client.get_session(session_id)
             poll_count += 1
 
+            logger.debug(f"Session {session_id} state: {session.state} (poll #{poll_count})")
+
             # Check for terminal state
             if session.state in (SessionState.COMPLETED, SessionState.FAILED):
                 return PollResult(
@@ -111,6 +118,7 @@ class Poller:
             # Handle waiting states
             if session.state == SessionState.WAITING_FOR_PLAN_APPROVAL:
                 if self.config.jules.auto_approve_plans:
+                    logger.info(f"Auto-approving plan for session {session_id}")
                     await self.api_client.approve_plan(session_id)
 
             elif session.state == SessionState.WAITING_FOR_INPUT:

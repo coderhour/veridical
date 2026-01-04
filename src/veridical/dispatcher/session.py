@@ -1,5 +1,6 @@
 """Session management for the dispatcher."""
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,8 @@ from veridical.synchronizer.git import GitWrapper
 if TYPE_CHECKING:
     from veridical.api.client import JulesClient
     from veridical.config.schema import VeridicalConfig
+
+logger = logging.getLogger(__name__)
 
 
 class Dispatcher:
@@ -63,6 +66,7 @@ class Dispatcher:
         Returns:
             Complete sandwich-structured prompt
         """
+        logger.debug("Building prompt...")
         return self.prompt_builder.build_prompt(
             task=task,
             error_context=error_context,
@@ -85,7 +89,11 @@ class Dispatcher:
         Returns:
             Created session information
         """
+        logger.info("Creating Jules session...")
         target_branch = branch or self.config.git.base_branch
+        logger.info(
+            f"Creating session with prompt length {len(prompt)} and target branch '{target_branch}'..."
+        )
 
         if source:
             source_context = SourceContext(

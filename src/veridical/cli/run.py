@@ -1,6 +1,7 @@
 """Run command - initiates the autonomous quality loop."""
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 from typing import Annotated
@@ -13,6 +14,8 @@ from veridical.api.client import JulesClient
 from veridical.config.loader import load_config
 from veridical.exceptions import VeridicalError
 from veridical.supervisor.loop import Supervisor
+
+logger = logging.getLogger(__name__)
 
 console = Console()
 
@@ -57,6 +60,8 @@ def run_supervisor(
                         "[yellow]Dry run: Initialized supervisor but not running loop[/yellow]"
                     )
                     return
+
+                logger.info(f"Starting supervisor loop for task: {task}")
 
                 # Run loop
                 result = await supervisor.run(task)

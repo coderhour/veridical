@@ -1,6 +1,7 @@
 """Quality gate verification."""
 
 import asyncio
+import logging
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -12,6 +13,8 @@ from veridical.verifier.task_completion import verify_task_completion
 
 if TYPE_CHECKING:
     from veridical.config.schema import QualityGate, VeridicalConfig
+
+logger = logging.getLogger(__name__)
 
 
 class Verifier:
@@ -43,14 +46,13 @@ class Verifier:
 
     async def _run_gate_logic(self, gate: "QualityGate") -> GateResult:
         """Run the logic for a single gate based on its type."""
+        logger.info(f"Running quality gate: {gate.name} (type: {gate.type})")
         if gate.type == "command":
             return await self.runner.run_gate(gate)
         if gate.type == "task_completion":
             # The schema validates that `path` is present.
             tasks_file_path = self.repo_path / gate.path
-            return await asyncio.to_thread(
-                verify_task_completion, gate.name, tasks_file_path
-            )
+            return await asyncio.to_thread(verify_task_completion, gate.name, tasks_file_path)
 
         # This should be unreachable due to schema validation
         raise ValueError(f"Unknown quality gate type: {gate.type}")
@@ -76,6 +78,7 @@ class Verifier:
         duration = time.monotonic() - start_time
         all_passed = all(r.passed for r in results)
 
+        logger.info(f"Verification completed. Passed: {all_passed}, Duration: {duration:.2f}s")
         return VerificationResult(
             passed=all_passed,
             gates=results,

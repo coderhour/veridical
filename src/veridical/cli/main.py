@@ -1,5 +1,6 @@
 """Main CLI application using Typer."""
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -10,6 +11,7 @@ from veridical.cli.config import config_app
 from veridical.cli.run import run
 from veridical.cli.status import status
 from veridical.cli.verify import verify
+from veridical.logging_config import setup_logging
 
 # Create main app
 app = typer.Typer(
@@ -38,7 +40,7 @@ def version_callback(value: bool) -> None:
 
 @app.callback()
 def main(
-    version: Annotated[
+    version: Annotated[  # noqa: ARG001
         bool | None,
         typer.Option(
             "--version",
@@ -56,15 +58,20 @@ def main(
             help="Enable verbose output",
         ),
     ] = False,
+    log_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--log-file",
+            help="Path to save logs",
+        ),
+    ] = None,
 ) -> None:
     """Veridical - Autonomous quality assurance for Google Jules.
 
     Run quality gates locally or dispatch tasks to Jules with
     iterative verification loops.
     """
-    # Store verbose flag in context for subcommands
-    # Note: In a full implementation, we'd set up logging here
-    pass
+    setup_logging(log_file=log_file, verbose=verbose)
 
 
 if __name__ == "__main__":

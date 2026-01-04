@@ -1,5 +1,6 @@
 """Patch application for the synchronizer."""
 
+import logging
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -7,6 +8,8 @@ from typing import TYPE_CHECKING
 from veridical.models.result import PatchResult, PatchStatus
 from veridical.synchronizer.branch import BranchManager
 from veridical.synchronizer.git import GitWrapper
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from veridical.api.client import JulesClient
@@ -35,6 +38,7 @@ class PatchApplier:
             Result of the patch application
         """
         if not patch_data.strip():
+            logger.info("No patch data provided, skipping application.")
             return PatchResult(
                 success=True,
                 status=PatchStatus.APPLIED,
@@ -43,6 +47,7 @@ class PatchApplier:
             )
 
         try:
+            logger.info("Applying patch...")
             # Write patch to temp file and apply
             patch_file = self.repo_path / ".veridical_patch.tmp"
             patch_file.write_text(patch_data)
@@ -55,6 +60,7 @@ class PatchApplier:
                     capture_output=True,
                     text=True,
                 )
+                logger.info("Patch applied successfully.")
             finally:
                 patch_file.unlink(missing_ok=True)
 
@@ -66,6 +72,7 @@ class PatchApplier:
 
         except subprocess.CalledProcessError as e:
             error_msg = e.stderr or str(e)
+            logger.error(f"Failed to apply patch: {error_msg}")
             if "conflict" in error_msg.lower():
                 return PatchResult.failed(error_msg, status=PatchStatus.CONFLICT)
             return PatchResult.failed(error_msg)
@@ -110,7 +117,10 @@ class Synchronizer:
         Returns:
             Name of the created branch
         """
-        return self.branch_manager.create_iteration_branch(iteration)
+        branch_name = f"veridical-iteration-{iteration}"
+        logger.info(f"Creating iteration branch: {branch_name}")
+        self.git.create_branch(branch_name)
+        return branch_name
 
     async def apply_session_patch(
         self,

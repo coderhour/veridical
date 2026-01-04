@@ -1,10 +1,13 @@
 """Git operations wrapper."""
 
 import hashlib
+import logging
 import subprocess
 from pathlib import Path
 
 from veridical.exceptions import SynchronizationError
+
+logger = logging.getLogger(__name__)
 
 
 class GitWrapper:
@@ -41,6 +44,7 @@ class GitWrapper:
         Raises:
             SynchronizationError: If command fails and check is True
         """
+        logger.debug(f"Running git command: git {' '.join(args)}")
         try:
             result = subprocess.run(
                 ["git", *args],

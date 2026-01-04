@@ -260,7 +260,7 @@ class JulesClient:
         return [ActivityEntry.model_validate(a) for a in activities]
 
     async def download_patch(self, session_id: str) -> str:
-        """Download patch for a session.
+        """Download patch for a session by extracting it from activities.
 
         Args:
             session_id: ID of the session
@@ -268,13 +268,14 @@ class JulesClient:
         Returns:
             Unified diff content
         """
-        response = await self._request_with_retry(
-            "GET",
-            f"/sessions/{session_id}/diff",
-        )
-        # Check Content-Type to handle JSON-wrapped diff or raw text
-        content_type = response.headers.get("content-type", "")
-        if "application/json" in content_type:
-            data = response.json()
-            return str(data.get("diff", ""))
-        return response.text
+        activities = await self.get_activities(session_id)
+
+        # Iterate in reverse to find the most recent patch
+        for activity in reversed(activities):
+            for artifact in activity.artifacts:
+                if artifact.change_set and artifact.change_set.git_patch:
+                    patch = artifact.change_set.git_patch.unidiff_patch
+                    if patch:
+                        return patch
+
+        return ""

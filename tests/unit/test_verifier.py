@@ -36,11 +36,7 @@ class TestTaskCompletionVerifier:
     def test_ignored_incomplete_tasks(self, tmp_path: Path) -> None:
         """Test that incomplete manual/integration tests are ignored."""
         tasks_md = tmp_path / "tasks.md"
-        tasks_md.write_text(
-            "- [x] Task 1\n"
-            "- [ ] Some manual test\n"
-            "- [ ] An integration test\n"
-        )
+        tasks_md.write_text("- [x] Task 1\n- [ ] Some manual test\n- [ ] An integration test\n")
 
         result = verify_task_completion(self.GATE_NAME, tasks_md)
         assert result.status == GateStatus.PASSED
@@ -48,11 +44,7 @@ class TestTaskCompletionVerifier:
     def test_mixed_incomplete_tasks(self, tmp_path: Path) -> None:
         """Test a mix of actionable and ignored incomplete tasks."""
         tasks_md = tmp_path / "tasks.md"
-        tasks_md.write_text(
-            "- [x] Task 1\n"
-            "- [ ] Actionable task\n"
-            "- [ ] Some manual test\n"
-        )
+        tasks_md.write_text("- [x] Task 1\n- [ ] Actionable task\n- [ ] Some manual test\n")
 
         result = verify_task_completion(self.GATE_NAME, tasks_md)
         assert result.status == GateStatus.FAILED
