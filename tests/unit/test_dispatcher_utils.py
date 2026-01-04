@@ -94,3 +94,57 @@ class TestDispatcherAutoDetect:
             # Verify API call
             call_args = client.create_session.call_args[0][0]
             assert call_args.source_context.source == "sources/github/other/repo"
+
+    @pytest.mark.asyncio
+    async def test_session_with_title(self) -> None:
+        """Test that session title is passed to the API."""
+        with patch("veridical.dispatcher.session.GitWrapper") as MockGitWrapper:
+            # Mock GitWrapper instance
+            mock_git = MagicMock()
+            mock_git.get_remote_url.return_value = "git@github.com:owner/repo.git"
+            MockGitWrapper.return_value = mock_git
+
+            # Mock dependencies
+            config = MagicMock()
+            config.git.base_branch = "main"
+            config.jules.auto_approve_plans = True
+
+            client = MagicMock()
+            client.create_session = AsyncMock(return_value=MagicMock())
+
+            dispatcher = Dispatcher(config, client, repo_path=Path("/tmp"))
+
+            # Call create_session with title
+            await dispatcher.create_session("test prompt", title="Fix login bug")
+
+            # Verify API call includes title
+            call_args = client.create_session.call_args[0][0]
+            assert call_args.title == "Fix login bug"
+            assert call_args.prompt == "test prompt"
+
+    @pytest.mark.asyncio
+    async def test_session_without_title(self) -> None:
+        """Test that session can be created without title."""
+        with patch("veridical.dispatcher.session.GitWrapper") as MockGitWrapper:
+            # Mock GitWrapper instance
+            mock_git = MagicMock()
+            mock_git.get_remote_url.return_value = "git@github.com:owner/repo.git"
+            MockGitWrapper.return_value = mock_git
+
+            # Mock dependencies
+            config = MagicMock()
+            config.git.base_branch = "main"
+            config.jules.auto_approve_plans = True
+
+            client = MagicMock()
+            client.create_session = AsyncMock(return_value=MagicMock())
+
+            dispatcher = Dispatcher(config, client, repo_path=Path("/tmp"))
+
+            # Call create_session without title
+            await dispatcher.create_session("test prompt")
+
+            # Verify API call has None title
+            call_args = client.create_session.call_args[0][0]
+            assert call_args.title is None
+            assert call_args.prompt == "test prompt"

@@ -3,7 +3,7 @@
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class SessionState(str, Enum):
@@ -105,6 +105,10 @@ class CreateSessionRequest(BaseModel):
     """Request payload for creating a new Jules session."""
 
     prompt: str = Field(..., description="Task description for Jules")
+    title: str | None = Field(
+        None,
+        description="Human-readable title for the session",
+    )
     source_context: SourceContext = Field(
         ...,
         alias="sourceContext",
@@ -201,7 +205,13 @@ class ActivityEntry(BaseModel):
 
     name: str | None = None
     id: str | None = None
-    create_time: datetime | None = Field(None, alias="createTime")
+    create_time: datetime | None = Field(
+        None,
+        alias="createTime",
+        validation_alias=AliasChoices("createTime", "timestamp"),
+    )
+    type: str | None = None
+    message: str | None = None
     description: str | None = None
     originator: str | None = None
     artifacts: list[Artifact] = Field(default_factory=list)

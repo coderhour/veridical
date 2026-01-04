@@ -76,6 +76,7 @@ class Dispatcher:
         self,
         prompt: str,
         *,
+        title: str | None = None,
         source: str | None = None,
         branch: str | None = None,
     ) -> SessionResponse:
@@ -83,6 +84,7 @@ class Dispatcher:
 
         Args:
             prompt: Complete prompt to send
+            title: Human-readable title for the session
             source: Source identifier (e.g., 'sources/github/owner/repo')
             branch: Git branch to work from. If None, uses config default or auto-detected.
 
@@ -109,6 +111,7 @@ class Dispatcher:
 
         request = CreateSessionRequest(
             prompt=prompt,
+            title=title,
             source_context=source_context,
             automation_mode=AutomationMode.AUTO_CREATE_PR,
             require_plan_approval=not self.config.jules.auto_approve_plans,

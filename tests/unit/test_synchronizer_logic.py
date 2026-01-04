@@ -12,13 +12,22 @@ from veridical.synchronizer.patch import Synchronizer
 @pytest.mark.unit
 class TestJulesClientPatch:
     @pytest.mark.asyncio
-    async def test_download_patch_text(self, respx_mock) -> None:
+    async def test_download_patch(self, respx_mock) -> None:
         client = JulesClient(api_key="test")
         session_id = "sess_123"
         diff_content = "diff --git a/foo.py b/foo.py\n..."
 
-        respx_mock.get(f"https://jules.googleapis.com/v1alpha/sessions/{session_id}/diff").mock(
-            return_value=httpx.Response(200, text=diff_content)
+        respx_mock.get(
+            f"https://jules.googleapis.com/v1alpha/sessions/{session_id}/activities"
+        ).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "activities": [
+                        {"artifacts": [{"changeSet": {"gitPatch": {"unidiffPatch": diff_content}}}]}
+                    ]
+                },
+            )
         )
 
         async with client:
@@ -26,18 +35,17 @@ class TestJulesClientPatch:
             assert result == diff_content
 
     @pytest.mark.asyncio
-    async def test_download_patch_json(self, respx_mock) -> None:
+    async def test_download_patch_empty(self, respx_mock) -> None:
         client = JulesClient(api_key="test")
         session_id = "sess_123"
-        diff_content = "diff --git a/foo.py b/foo.py\n..."
 
-        respx_mock.get(f"https://jules.googleapis.com/v1alpha/sessions/{session_id}/diff").mock(
-            return_value=httpx.Response(200, json={"diff": diff_content})
-        )
+        respx_mock.get(
+            f"https://jules.googleapis.com/v1alpha/sessions/{session_id}/activities"
+        ).mock(return_value=httpx.Response(200, json={"activities": []}))
 
         async with client:
             result = await client.download_patch(session_id)
-            assert result == diff_content
+            assert result == ""
 
 
 @pytest.mark.unit

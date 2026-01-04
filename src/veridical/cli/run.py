@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from veridical.api.client import JulesClient
+from veridical.cli.git_utils import check_spec_status, format_spec_warning
 from veridical.config.loader import load_config
 from veridical.exceptions import VeridicalError
 from veridical.supervisor.loop import Supervisor
@@ -48,7 +49,7 @@ def run_supervisor(
 
         async def _run() -> None:
             async with JulesClient(
-                api_key=api_key,  # type: ignore[arg-type]
+                api_key=api_key,
                 base_url=config.jules.api_base_url,
                 timeout=config.jules.poll_timeout,
             ) as client:
@@ -154,6 +155,16 @@ def run(
     """
     if dry_run:
         console.print("[yellow]Dry run mode - no API calls will be made[/yellow]")
+
+    # Check for unpushed spec changes
+    spec_status = check_spec_status()
+    if spec_status.needs_attention:
+        console.print()
+        console.print(format_spec_warning(spec_status))
+        console.print()
+        if not typer.confirm("Do you want to continue anyway?", default=False):
+            console.print("[yellow]Aborted. Push your changes first with: git push[/yellow]")
+            raise typer.Exit(code=0)
 
     console.print(f"[bold]Starting autonomous task:[/bold] {task}")
 

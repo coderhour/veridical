@@ -109,7 +109,7 @@ class Supervisor:
             prompt = self.dispatcher.build_prompt(task_description, error_context)
 
             # Create session (auto-detect source)
-            session = await self.dispatcher.create_session(prompt)
+            session = await self.dispatcher.create_session(prompt, title=task_description)
 
             # 2. POLLING
             self._transition_to(SupervisorState.POLLING)
