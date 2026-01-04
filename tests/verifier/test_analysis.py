@@ -42,14 +42,14 @@ async def test_analyze_log_large(mock_llm_client: LocalLLMClient) -> None:
     summaries = [
         "Summary of chunk 1.",
         "Summary of chunk 2.",
-        "Final summary of the two chunks.",
+        "Summary of (Summary of chunk 1.\\nSummary of chunk 2.)",
     ]
     mock_llm_client.get_completion.side_effect = lambda *args, **kwargs: summaries.pop(0)
 
     analyzer = LogAnalyzer(client=mock_llm_client)
     summary = await analyzer.analyze_log(log)
 
-    assert summary == "Final summary of the two chunks."
+    assert summary == "Summary of (Summary of chunk 1.\\nSummary of chunk 2.)"
     assert mock_llm_client.get_completion.call_count == 3
 
 
