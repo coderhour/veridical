@@ -1,6 +1,6 @@
 # Synchronizer Specification
 
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Isolation Branch Management
 The `Synchronizer` SHALL manage iteration isolation.

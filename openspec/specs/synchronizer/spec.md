@@ -19,38 +19,29 @@ THEN it SHALL accept a `repo_path` parameter of type `Path`
 AND it SHALL accept a `config` parameter of type `VeridicalConfig`
 
 ### Requirement: Isolation Branch Management
+The `Synchronizer` SHALL manage iteration isolation.
 
-The system SHALL create isolated branches for each iteration to prevent pollution of main.
-
-#### Scenario: Create Iteration Branch
-
-WHEN calling `synchronizer.create_iteration_branch(iteration: int)`
-THEN it SHALL create a new branch named `veridical/iter-{iteration}`
-AND it SHALL checkout that branch
-AND it SHALL return the branch name
-
-#### Scenario: Branch Already Exists
-
-WHEN a branch with the same name already exists
-THEN it SHALL delete the existing branch first
-AND it SHALL create the new branch
+#### Scenario: Verify Isolation
+- **GIVEN** a running loop at iteration 1
+- **WHEN** applying a patch
+- **THEN** it must create and checkout `veridical/iter-1`
+- **AND** apply the patch there
+- **AND** leave `main` branch untouched
 
 ### Requirement: Patch Application
+The `Synchronizer` SHALL apply remote diffs cleanly.
 
-The system SHALL apply patches received from Jules to the local repository.
+#### Scenario: Clean Patch
+- **GIVEN** a valid unified diff from Jules
+- **WHEN** `apply_patch` is called
+- **THEN** it must update local files
+- **AND** return `PatchResult.APPLIED`
 
-#### Scenario: Apply Patch Successfully
-
-WHEN calling `synchronizer.apply_patch(patch_data: str)`
-AND the patch applies cleanly
-THEN it SHALL return `PatchResult(success=True, files_changed=[...])`
-
-#### Scenario: Patch Application Failure
-
-WHEN calling `synchronizer.apply_patch(patch_data: str)`
-AND the patch cannot be applied cleanly
-THEN it SHALL return `PatchResult(success=False, error="...")`
-AND it SHALL NOT leave the repository in a dirty state
+#### Scenario: Patch Conflict
+- **GIVEN** a patch that conflicts with local changes
+- **WHEN** `apply_patch` is called
+- **THEN** it must return `PatchResult.CONFLICT`
+- **AND** not modify the file system (atomic failure)
 
 ### Requirement: Branch Cleanup
 
