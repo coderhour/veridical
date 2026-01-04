@@ -46,9 +46,9 @@ veridical = "veridical.cli.main:app"
 veri = "veridical.cli.main:app"
 
 [project.urls]
-Homepage = "https://github.com/veridical/veridical"
-Documentation = "https://github.com/veridical/veridical#readme"
-Repository = "https://github.com/veridical/veridical"
+Homepage = "https://github.com/coderhour/veridical"
+Documentation = "https://github.com/coderhour/veridical#readme"
+Repository = "https://github.com/coderhour/veridical"
 
 [build-system]
 requires = ["hatchling"]
