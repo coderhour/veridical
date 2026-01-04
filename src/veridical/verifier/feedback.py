@@ -1,20 +1,27 @@
 """Error summarization for feedback generation."""
 
+from veridical.config.schema import LocalLLMConfig
+from veridical.lld.client import LLDClient
 from veridical.models.result import GateResult, VerificationResult
+from veridical.verifier.analysis import LogAnalyzer
 
 
 class FeedbackGenerator:
     """Generates error summaries for feedback to the next iteration."""
 
-    def __init__(self, max_length: int = 2000) -> None:
+    def __init__(self, max_length: int = 2000, local_llm_config: LocalLLMConfig | None = None) -> None:
         """Initialize the feedback generator.
 
         Args:
             max_length: Maximum length of generated feedback
         """
         self.max_length = max_length
+        self.log_analyzer = None
+        if local_llm_config:
+            client = LLDClient(local_llm_config)
+            self.log_analyzer = LogAnalyzer(client)
 
-    def generate_feedback(self, result: VerificationResult) -> str:
+    async def generate_feedback(self, result: VerificationResult) -> str:
         """Generate error feedback from verification result.
 
         Args:
@@ -33,7 +40,7 @@ class FeedbackGenerator:
         sections: list[str] = []
 
         for gate in failed_gates:
-            section = self._summarize_gate(gate)
+            section = await self._summarize_gate(gate)
             sections.append(section)
 
         full_feedback = "\n\n".join(sections)
@@ -44,7 +51,7 @@ class FeedbackGenerator:
 
         return full_feedback
 
-    def _summarize_gate(self, gate: GateResult) -> str:
+    async def _summarize_gate(self, gate: GateResult) -> str:
         """Summarize a single gate failure.
 
         Args:
@@ -58,9 +65,13 @@ class FeedbackGenerator:
         # Prioritize error output
         content = gate.error_output or gate.output
 
-        # Compress output
-        compressed = self.compress_log_output(content)
-        lines.append(compressed)
+        # Analyze or compress output
+        if self.log_analyzer:
+            summary = await self.log_analyzer.analyze(content)
+            lines.append(summary)
+        else:
+            compressed = self.compress_log_output(content)
+            lines.append(compressed)
 
         return "\n".join(lines)
 

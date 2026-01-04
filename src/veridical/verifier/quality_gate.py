@@ -42,6 +42,7 @@ class Verifier:
         self.runner = CommandRunner(repo_path)
         self.feedback_generator = FeedbackGenerator(
             max_length=config.verifier.summary_max_length,
+            local_llm_config=config.local_llm,
         )
 
     async def _run_gate_logic(self, gate: "QualityGate") -> GateResult:
@@ -115,7 +116,7 @@ class Verifier:
             duration_seconds=duration,
         )
 
-    def generate_feedback(self, result: VerificationResult) -> str:
+    async def generate_feedback(self, result: VerificationResult) -> str:
         """Generate error feedback from a verification result.
 
         Args:
@@ -124,4 +125,4 @@ class Verifier:
         Returns:
             Error context string for the next iteration
         """
-        return self.feedback_generator.generate_feedback(result)
+        return await self.feedback_generator.generate_feedback(result)

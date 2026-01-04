@@ -59,6 +59,11 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+# local_llm:
+#   base_url: http://localhost:11434/v1
+#   model: llama3
+#   timeout: 120
 """
 
 NODEJS_CONFIG_TEMPLATE = """\
