@@ -76,19 +76,21 @@ class TestSynchronizerLogic:
 
     def test_create_iteration_branch(self) -> None:
         with (
-            patch("veridical.synchronizer.patch.GitWrapper") as MockGit,
-            patch("veridical.synchronizer.patch.BranchManager"),
+            patch("veridical.synchronizer.patch.GitWrapper"),
+            patch("veridical.synchronizer.patch.BranchManager") as MockManager,
             patch("veridical.synchronizer.patch.PatchApplier"),
         ):
-            mock_git = MockGit.return_value
+            mock_manager = MockManager.return_value
+            mock_manager.create_iteration_branch.return_value = "custom-prefix-123"
+
             config = MagicMock()
             config.git.base_branch = "main"
 
             synchronizer = Synchronizer(config, Path("/tmp"))
             branch = synchronizer.create_iteration_branch(123)
 
-            assert branch == "veridical-iteration-123"
-            mock_git.create_branch.assert_called_once_with("veridical-iteration-123")
+            assert branch == "custom-prefix-123"
+            mock_manager.create_iteration_branch.assert_called_once_with(123)
 
 
 @pytest.mark.unit

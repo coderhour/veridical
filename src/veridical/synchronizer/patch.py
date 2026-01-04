@@ -117,10 +117,8 @@ class Synchronizer:
         Returns:
             Name of the created branch
         """
-        branch_name = f"veridical-iteration-{iteration}"
-        logger.info(f"Creating iteration branch: {branch_name}")
-        self.git.create_branch(branch_name)
-        return branch_name
+        logger.info(f"Creating iteration branch for iteration {iteration}")
+        return self.branch_manager.create_iteration_branch(iteration)
 
     async def apply_session_patch(
         self,
