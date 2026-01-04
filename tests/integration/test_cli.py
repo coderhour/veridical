@@ -29,6 +29,12 @@ class TestCliConfigCommands:
             (TemplateType.NODEJS, "(Node.js)"),
             (TemplateType.ELIXIR, "(Elixir)"),
             (TemplateType.JAVA, "(Java with Gradle)"),
+            (TemplateType.GO, "(Go)"),
+            (TemplateType.RUST, "(Rust)"),
+            (TemplateType.TYPESCRIPT, "(TypeScript)"),
+            (TemplateType.RUBY, "(Ruby)"),
+            (TemplateType.PHP, "(PHP)"),
+            (TemplateType.DOTNET, "(.NET)"),
         ],
     )
     def test_config_init_templates(
@@ -61,6 +67,12 @@ class TestCliConfigCommands:
             (TemplateType.NODEJS, "(Node.js)"),
             (TemplateType.ELIXIR, "(Elixir)"),
             (TemplateType.JAVA, "(Java with Gradle)"),
+            (TemplateType.GO, "(Go)"),
+            (TemplateType.RUST, "(Rust)"),
+            (TemplateType.TYPESCRIPT, "(TypeScript)"),
+            (TemplateType.RUBY, "(Ruby)"),
+            (TemplateType.PHP, "(PHP)"),
+            (TemplateType.DOTNET, "(.NET)"),
         ],
     )
     def test_config_template_command(

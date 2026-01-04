@@ -6,10 +6,16 @@ import pytest
 import yaml
 
 from veridical.config.defaults import (
+    DOTNET_CONFIG_TEMPLATE,
     ELIXIR_CONFIG_TEMPLATE,
+    GO_CONFIG_TEMPLATE,
     JAVA_CONFIG_TEMPLATE,
     NODEJS_CONFIG_TEMPLATE,
+    PHP_CONFIG_TEMPLATE,
     PYTHON_CONFIG_TEMPLATE,
+    RUBY_CONFIG_TEMPLATE,
+    RUST_CONFIG_TEMPLATE,
+    TYPESCRIPT_CONFIG_TEMPLATE,
     TemplateType,
     get_config_template,
 )
@@ -165,6 +171,12 @@ class TestConfigTemplate:
             (TemplateType.NODEJS, NODEJS_CONFIG_TEMPLATE),
             (TemplateType.ELIXIR, ELIXIR_CONFIG_TEMPLATE),
             (TemplateType.JAVA, JAVA_CONFIG_TEMPLATE),
+            (TemplateType.GO, GO_CONFIG_TEMPLATE),
+            (TemplateType.RUST, RUST_CONFIG_TEMPLATE),
+            (TemplateType.TYPESCRIPT, TYPESCRIPT_CONFIG_TEMPLATE),
+            (TemplateType.RUBY, RUBY_CONFIG_TEMPLATE),
+            (TemplateType.PHP, PHP_CONFIG_TEMPLATE),
+            (TemplateType.DOTNET, DOTNET_CONFIG_TEMPLATE),
         ],
     )
     def test_get_template(
@@ -211,6 +223,32 @@ class TestConfigTemplate:
                 TemplateType.JAVA,
                 ["gradle-test", "gradle-checkstyle"],
                 "(Java with Gradle)",
+            ),
+            (
+                TemplateType.GO,
+                ["go-test", "go-vet", "golangci-lint", "go-fmt"],
+                "(Go)",
+            ),
+            (
+                TemplateType.RUST,
+                ["cargo-test", "cargo-clippy", "cargo-fmt"],
+                "(Rust)",
+            ),
+            (
+                TemplateType.TYPESCRIPT,
+                ["npm-test", "tsc", "eslint", "prettier"],
+                "(TypeScript)",
+            ),
+            (TemplateType.RUBY, ["rspec", "rubocop"], "(Ruby)"),
+            (
+                TemplateType.PHP,
+                ["phpunit", "phpstan", "php-cs-fixer"],
+                "(PHP)",
+            ),
+            (
+                TemplateType.DOTNET,
+                ["dotnet-test", "dotnet-format", "dotnet-build"],
+                "(.NET)",
             ),
         ],
     )

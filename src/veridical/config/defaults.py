@@ -10,6 +10,12 @@ class TemplateType(str, Enum):
     NODEJS = "nodejs"
     ELIXIR = "elixir"
     JAVA = "java"
+    GO = "go"
+    RUST = "rust"
+    TYPESCRIPT = "typescript"
+    RUBY = "ruby"
+    PHP = "php"
+    DOTNET = "dotnet"
 
 
 PYTHON_CONFIG_TEMPLATE = """\
@@ -182,11 +188,225 @@ git:
   auto_cleanup: true
 """
 
+DOTNET_CONFIG_TEMPLATE = """# Veridical Configuration (.NET)
+# See https://github.com/veridical/veridical for documentation
+jules:
+  api_base_url: https://jules.googleapis.com/v1alpha
+  poll_interval: 30
+  poll_timeout: 3600
+  auto_approve_plans: true
+  max_retries: 3
+  retry_delay: 1.0
+supervisor:
+  max_iterations: 10
+  max_consecutive_failures: 3
+  stagnation_threshold: 3
+verifier:
+  quality_gates:
+    - name: dotnet-test
+      command: dotnet test
+      timeout: 300
+      required: true
+    - name: dotnet-format
+      command: dotnet format --verify-no-changes
+      timeout: 120
+      required: true
+    - name: dotnet-build
+      command: dotnet build --warnaserror
+      timeout: 180
+      required: true
+  summary_max_length: 2000
+git:
+  base_branch: main
+  branch_prefix: veridical/iter-
+  auto_cleanup: true
+"""
+
+PHP_CONFIG_TEMPLATE = """# Veridical Configuration (PHP)
+# See https://github.com/veridical/veridical for documentation
+jules:
+  api_base_url: https://jules.googleapis.com/v1alpha
+  poll_interval: 30
+  poll_timeout: 3600
+  auto_approve_plans: true
+  max_retries: 3
+  retry_delay: 1.0
+supervisor:
+  max_iterations: 10
+  max_consecutive_failures: 3
+  stagnation_threshold: 3
+verifier:
+  quality_gates:
+    - name: phpunit
+      command: ./vendor/bin/phpunit
+      timeout: 300
+      required: true
+    - name: phpstan
+      command: ./vendor/bin/phpstan analyse
+      timeout: 120
+      required: true
+    - name: php-cs-fixer
+      command: ./vendor/bin/php-cs-fixer fix --dry-run --diff
+      timeout: 120
+      required: true
+  summary_max_length: 2000
+git:
+  base_branch: main
+  branch_prefix: veridical/iter-
+  auto_cleanup: true
+"""
+
+RUBY_CONFIG_TEMPLATE = """# Veridical Configuration (Ruby)
+# See https://github.com/veridical/veridical for documentation
+jules:
+  api_base_url: https://jules.googleapis.com/v1alpha
+  poll_interval: 30
+  poll_timeout: 3600
+  auto_approve_plans: true
+  max_retries: 3
+  retry_delay: 1.0
+supervisor:
+  max_iterations: 10
+  max_consecutive_failures: 3
+  stagnation_threshold: 3
+verifier:
+  quality_gates:
+    - name: rspec
+      command: bundle exec rspec
+      timeout: 300
+      required: true
+    - name: rubocop
+      command: bundle exec rubocop
+      timeout: 120
+      required: true
+  summary_max_length: 2000
+git:
+  base_branch: main
+  branch_prefix: veridical/iter-
+  auto_cleanup: true
+"""
+
+TYPESCRIPT_CONFIG_TEMPLATE = """# Veridical Configuration (TypeScript)
+# See https://github.com/veridical/veridical for documentation
+jules:
+  api_base_url: https://jules.googleapis.com/v1alpha
+  poll_interval: 30
+  poll_timeout: 3600
+  auto_approve_plans: true
+  max_retries: 3
+  retry_delay: 1.0
+supervisor:
+  max_iterations: 10
+  max_consecutive_failures: 3
+  stagnation_threshold: 3
+verifier:
+  quality_gates:
+    - name: npm-test
+      command: npm test
+      timeout: 300
+      required: true
+    - name: tsc
+      command: npx tsc --noEmit
+      timeout: 120
+      required: true
+    - name: eslint
+      command: npx eslint .
+      timeout: 120
+      required: true
+    - name: prettier
+      command: npx prettier --check .
+      timeout: 120
+      required: true
+  summary_max_length: 2000
+git:
+  base_branch: main
+  branch_prefix: veridical/iter-
+  auto_cleanup: true
+"""
+
+RUST_CONFIG_TEMPLATE = """# Veridical Configuration (Rust)
+# See https://github.com/veridical/veridical for documentation
+jules:
+  api_base_url: https://jules.googleapis.com/v1alpha
+  poll_interval: 30
+  poll_timeout: 3600
+  auto_approve_plans: true
+  max_retries: 3
+  retry_delay: 1.0
+supervisor:
+  max_iterations: 10
+  max_consecutive_failures: 3
+  stagnation_threshold: 3
+verifier:
+  quality_gates:
+    - name: cargo-test
+      command: cargo test
+      timeout: 300
+      required: true
+    - name: cargo-clippy
+      command: cargo clippy -- -D warnings
+      timeout: 180
+      required: true
+    - name: cargo-fmt
+      command: cargo fmt --check
+      timeout: 60
+      required: true
+  summary_max_length: 2000
+git:
+  base_branch: main
+  branch_prefix: veridical/iter-
+  auto_cleanup: true
+"""
+
+GO_CONFIG_TEMPLATE = """# Veridical Configuration (Go)
+# See https://github.com/veridical/veridical for documentation
+jules:
+  api_base_url: https://jules.googleapis.com/v1alpha
+  poll_interval: 30
+  poll_timeout: 3600
+  auto_approve_plans: true
+  max_retries: 3
+  retry_delay: 1.0
+supervisor:
+  max_iterations: 10
+  max_consecutive_failures: 3
+  stagnation_threshold: 3
+verifier:
+  quality_gates:
+    - name: go-test
+      command: go test ./...
+      timeout: 300
+      required: true
+    - name: go-vet
+      command: go vet ./...
+      timeout: 120
+      required: true
+    - name: golangci-lint
+      command: golangci-lint run
+      timeout: 180
+      required: true
+    - name: go-fmt
+      command: gofmt -l .
+      timeout: 60
+      required: true
+  summary_max_length: 2000
+git:
+  base_branch: main
+  branch_prefix: veridical/iter-
+  auto_cleanup: true
+"""
+
 TEMPLATES = {
     TemplateType.PYTHON: PYTHON_CONFIG_TEMPLATE,
     TemplateType.NODEJS: NODEJS_CONFIG_TEMPLATE,
     TemplateType.ELIXIR: ELIXIR_CONFIG_TEMPLATE,
     TemplateType.JAVA: JAVA_CONFIG_TEMPLATE,
+    TemplateType.GO: GO_CONFIG_TEMPLATE,
+    TemplateType.RUST: RUST_CONFIG_TEMPLATE,
+    TemplateType.TYPESCRIPT: TYPESCRIPT_CONFIG_TEMPLATE,
+    TemplateType.RUBY: RUBY_CONFIG_TEMPLATE,
+    TemplateType.PHP: PHP_CONFIG_TEMPLATE,
+    TemplateType.DOTNET: DOTNET_CONFIG_TEMPLATE,
 }
 
 
