@@ -77,7 +77,7 @@ def config_init(
         typer.Option(
             "--template",
             "-t",
-            help="Configuration template for a specific language",
+            help="Configuration template. Available: python, nodejs, elixir, java, go, rust, typescript, ruby, php, dotnet",
             case_sensitive=False,
         ),
     ] = TemplateType.PYTHON,
@@ -103,7 +103,7 @@ def config_template(
         typer.Option(
             "--template",
             "-t",
-            help="Configuration template for a specific language",
+            help="Configuration template. Available: python, nodejs, elixir, java, go, rust, typescript, ruby, php, dotnet",
             case_sensitive=False,
         ),
     ] = TemplateType.PYTHON,
