@@ -10,9 +10,13 @@ class SessionState(str, Enum):
     """State of a Jules session as returned by the API."""
 
     PENDING = "PENDING"
+    QUEUED = "QUEUED"
     RUNNING = "RUNNING"
+    PLANNING = "PLANNING"
+    IN_PROGRESS = "IN_PROGRESS"
     WAITING_FOR_PLAN_APPROVAL = "WAITING_FOR_PLAN_APPROVAL"
     WAITING_FOR_INPUT = "WAITING_FOR_INPUT"
+    PAUSED = "PAUSED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
@@ -131,14 +135,14 @@ class SessionResponse(BaseModel):
     """Response from Jules API for session operations."""
 
     name: str = Field(..., description="Session resource name (acts as ID)")
-    state: SessionState = Field(..., description="Current session state")
-    create_time: datetime = Field(
-        ...,
+    state: SessionState | None = Field(None, description="Current session state")
+    create_time: datetime | None = Field(
+        None,
         alias="createTime",
         description="When the session was created",
     )
-    update_time: datetime = Field(
-        ...,
+    update_time: datetime | None = Field(
+        None,
         alias="updateTime",
         description="When the session was last updated",
     )

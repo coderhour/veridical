@@ -47,11 +47,21 @@ class JulesClient:
             retry_delay: Base delay between retries in seconds.
         """
         self.api_key = api_key
-        self.base_url = base_url.rstrip("/")
+        self.base_url = base_url
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self._client: httpx.AsyncClient | None = None
+
+    async def _log_request(self, request: httpx.Request) -> None:
+        print(f"DEBUG REQ: {request.method} {request.url}")
+        for name, value in request.headers.items():
+            if name.lower() == "x-goog-api-key":
+                print(f"DEBUG REQ Header: {name}: {'*' * len(value)}")
+            else:
+                print(f"DEBUG REQ Header: {name}: {value}")
+        if request.content:
+            print(f"DEBUG REQ Body: {request.content.decode()}")
 
     async def __aenter__(self) -> "JulesClient":
         """Enter async context manager."""
@@ -59,9 +69,10 @@ class JulesClient:
             base_url=self.base_url,
             timeout=self.timeout,
             headers={
-                "Authorization": f"Bearer {self.api_key}",
+                "X-Goog-Api-Key": self.api_key,
                 "Content-Type": "application/json",
             },
+            event_hooks={"request": [self._log_request]},
         )
         return self
 
@@ -111,6 +122,12 @@ class JulesClient:
 
         for attempt in range(self.max_retries + 1):
             try:
+                # Debug logging
+                full_url = str(self.client.base_url.join(path))
+                print(f"DEBUG: {method} {full_url}")
+                if "json" in kwargs:
+                    print(f"DEBUG: Payload: {kwargs['json']}")
+
                 response = await self.client.request(method, path, **kwargs)
 
                 # Handle specific error codes
@@ -129,11 +146,16 @@ class JulesClient:
 
                 # Raise for other error status codes
                 if response.status_code >= 400:
+                    print(f"DEBUG: Response body: {response.text}")
                     raise APIError(
                         f"API request failed: {response.status_code}",
                         status_code=response.status_code,
                         response_body=response.text,
                     )
+
+                # Debug log successful response
+                if response.status_code < 300:
+                    print(f"DEBUG: Response body: {response.text}")
 
                 return response
 

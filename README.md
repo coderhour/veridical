@@ -8,7 +8,17 @@ Veridical implements autonomous quality assurance loops that enforce high code q
 
 ## Installation
 
-**Note**: Veridical is currently in development and not yet published to PyPI.
+### Prerequisites
+
+Veridical requires the following tools to be installed on your system:
+
+1.  **Git**: For repository management and patch application.
+2.  **OpenSpec CLI**: For spec-driven development and proposal management.
+    ```bash
+    npm install -g @fission-ai/openspec@latest
+    ```
+3.  **Python 3.11+**: The core execution environment.
+4.  **uv** (Recommended): For fast and reliable dependency management.
 
 ### For Development
 
@@ -30,19 +40,65 @@ uv add veridical
 pip install veridical
 ```
 
-## Quick Start
+## Quick Start: End-to-End Example
 
-**Tip**: You can use `veri` as a shorter alias for `veridical`!
+Veridical works best when combined with **OpenSpec**. Here is how you use them together to autonomously fix a bug.
+
+### 1. Create a Change Proposal
+First, design your change. The AI assistant (Antigravity, Claude, etc.) acts as an architect to draft your plan.
+
+```bash
+# Use the slash command: /openspec-proposal "Fix password validation bug"
+```
+
+**What happens:** Your AI assistant analyzes the codebase and generates **full content** (not just a skeleton) in `openspec/changes/fix-password-validation/`:
+- `proposal.md`: Comprehensive rationale and impact analysis.
+- `tasks.md`: A step-by-step technical implementation checklist.
+- `specs/`: Specific requirement deltas (ADDED/MODIFIED/REMOVED).
+
+**Critical Step:** Review and refine the AI's draft. Once satisfied, you **must commit and push** these files so Google Jules can read them from GitHub:
+
+```bash
+git add openspec/changes/fix-password-validation/
+git commit -m "docs: add proposal for password validation fix"
+git push origin main
+```
+
+### 2. Run the Autonomous Loop
+Once the proposal is on GitHub, let Veridical orchestrate the implementation and verification.
+
+```bash
+# Start the autonomous supervisor
+veri run "Fix password validation per approved proposal"
+```
+
+### 3. What Veridical Does (The Magic)
+Veridical manages the entire lifecycle so you don't have to:
+- **Dispatches**: Sends the task and OpenSpec context to **Google Jules**.
+- **Monitors**: Polls Jules for completion (runs in the cloud, doesn't block your machine).
+- **Synchronizes**: Downloads the generated **patch (git diff)** via the API and applies it to a fresh local isolation branch. No remote push required.
+- **Verifies**: Runs quality gates defined in your `.veridical.yaml`. Since these are just CLI commands (e.g., `pytest`, `npm test`, `go test`), Veridical works with any language or framework.
+- **Iterates**: If a gate fails, it sends the exact error back to Jules and retries.
+- **Completion**: Once all gates pass locally, it merges the fixed, tested, and linted code.
+
+### 4. Archive and Baseline
+Finally, archive the change to update your project's permanent specifications.
+
+```bash
+openspec archive fix-password-validation
+```
+
+---
+
+### Command Reference
 
 ```bash
 # Initialize configuration
 veridical config init
 
 # Run quality verification locally
+# (Runs pytest, ruff, etc. defined in .veridical.yaml)
 veri verify
-
-# Start an autonomous task loop
-veri run "Fix the login validation bug"
 
 # Check status of active sessions
 veri status
@@ -85,6 +141,53 @@ Set your Jules API key:
 ```bash
 export JULES_API_KEY="your-api-key-here"
 ```
+
+## Development Workflow (OpenSpec)
+
+Veridical uses **OpenSpec** for spec-driven development. This ensures that every significant change is well-defined, documented, and traceable.
+
+### When to use OpenSpec
+- Creating new features or significant components.
+- Modifying core business logic or architectural patterns.
+- Any change that requires multiple steps or coordination.
+
+*Note: For simple bug fixes, typos, or documentation updates, direct edits are acceptable.*
+
+### The OpenSpec Lifecycle
+
+The workflow consists of three main stages, managed via slash commands or CLI:
+
+1.  **Proposal (`/openspec-proposal`)**: 
+    - **Purpose**: Design the change before implementing it.
+    - **Actions**: Scaffolds `proposal.md`, `tasks.md`, and spec deltas in `openspec/changes/<change-id>/`.
+    - **Goal**: Define *why*, *what*, and *how* (tasks) without writing code.
+
+2.  **Implementation (`/openspec-apply`)**:
+    - **Purpose**: Execute the approved plan.
+    - **Actions**: Follows the `tasks.md` sequentially to implement the code.
+    - **Goal**: Complete the feature and verify it against the specs.
+
+3.  **Archiving (`/openspec-archive`)**:
+    - **Purpose**: Merge the specs into the project foundation.
+    - **Actions**: Merges spec deltas into `openspec/specs/` and moves the change to `openspec/changes/archive/`.
+    - **Goal**: Maintain a clean "source of truth" for the project's capabilities.
+
+### CLI Usage
+
+If you prefer using the CLI directly:
+
+```bash
+# List all active changes
+openspec list
+
+# Validate your change
+openspec validate <change-id> --strict
+
+# Archive a completed change
+openspec archive <change-id> --yes
+```
+
+For detailed instructions and conventions, refer to [openspec/AGENTS.md](./openspec/AGENTS.md).
 
 ## How Repo Detection Works
 
@@ -265,6 +368,20 @@ pytest && ruff check src/ && mypy src/
 - [ ] Patch application and verification
 - [ ] Error feedback generation
 - [ ] End-to-end integration tests
+
+## Pro-Tips & FAQ
+
+### Do I always need an OpenSpec proposal?
+No. For trivial fixes (typos, CSS tweaks, documentation), you can skip OpenSpec and run `veri run "your task"` directly. Veridical will still enforce your local quality gates (pytest, ruff, etc.).
+
+### How does Jules know which proposal to use?
+Jules clones your repo and reads `openspec/AGENTS.md`, which instructs it to scan `openspec/changes/` for relevant proposals. Mentioning "per approved proposal" in your command helps Jules focus.
+
+### What if I have multiple active proposals?
+Jules will scan the `openspec/changes/` directory. If your task description matches a specific `proposal.md`, it will follow that one. Keep your `change-id` descriptive!
+
+### Does Veridical work with other languages?
+Yes! While Veridical itself is written in Python, you can configure any command in `.veridical.yaml`. You can use it to supervise Go, Rust, JavaScript, or any project with a CLI-based test suite.
 
 ## License
 
