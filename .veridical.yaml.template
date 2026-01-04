@@ -46,6 +46,11 @@ verifier:
       timeout: 60
       required: true
 
+    - name: ruff-format
+      command: ruff format --check src/
+      timeout: 60
+      required: true
+
     - name: mypy
       command: mypy src/
       timeout: 120
