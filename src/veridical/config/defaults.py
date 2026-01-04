@@ -1,4 +1,5 @@
 """Default configuration values and templates."""
+
 from enum import Enum
 
 

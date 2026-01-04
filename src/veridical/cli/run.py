@@ -57,12 +57,6 @@ def run_supervisor(
                 # Initialize Supervisor
                 supervisor = Supervisor(config, client, Path.cwd())
 
-                if dry_run:
-                    console.print(
-                        "[yellow]Dry run: Initialized supervisor but not running loop[/yellow]"
-                    )
-                    return
-
                 if session_id:
                     logger.info(f"Resuming session {session_id} for task: {task}")
                 else:
@@ -96,6 +90,12 @@ def run_supervisor(
 
                 if not result.success:
                     raise typer.Exit(code=1)
+
+        if dry_run:
+            console.print(
+                "[yellow]Dry run: Options parsed successfully. Supervisor not started.[/yellow]"
+            )
+            return
 
         asyncio.run(_run())
 

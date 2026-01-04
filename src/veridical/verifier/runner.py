@@ -48,15 +48,26 @@ class CommandRunner:
                     timeout=gate.timeout,
                 )
             except TimeoutError:
+                # Handle timeout by killing process and draining pipes to avoid ResourceWarnings
                 process.kill()
-                await process.wait()
+                try:
+                    # communicate() after kill() should be fast as it just drains the pipes
+                    _stdout_data, stderr_data = await asyncio.wait_for(
+                        process.communicate(), timeout=2.0
+                    )
+                    error_out = stderr_data.decode("utf-8", errors="replace") if stderr_data else ""
+                except (TimeoutError, Exception):
+                    # Fallback if communicate still hangs
+                    await process.wait()
+                    error_out = "Command timed out and failed to drain pipes"
+
                 return GateResult(
                     name=gate.name,
                     command=gate.command,
                     status=GateStatus.ERROR,
                     exit_code=-1,
                     output="",
-                    error_output=f"Command timed out after {gate.timeout} seconds",
+                    error_output=f"Command timed out after {gate.timeout} seconds. {error_out}",
                     duration_seconds=gate.timeout,
                 )
 

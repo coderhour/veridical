@@ -53,7 +53,9 @@ class JulesClient:
         self.retry_delay = retry_delay
         self._client: httpx.AsyncClient | None = None
 
-    async def _log_request(self, request: httpx.Request) -> None:
+    @staticmethod
+    async def _log_request(request: httpx.Request) -> None:
+        """Log request details for debugging."""
         print(f"DEBUG REQ: {request.method} {request.url}")
         for name, value in request.headers.items():
             if name.lower() == "x-goog-api-key":
@@ -61,20 +63,35 @@ class JulesClient:
             else:
                 print(f"DEBUG REQ Header: {name}: {value}")
         if request.content:
-            print(f"DEBUG REQ Body: {request.content.decode()}")
+            try:
+                # Avoid decoding large binary or non-text content
+                ctype = request.headers.get("Content-Type", "").lower()
+                if "application/json" in ctype or "text/" in ctype:
+                    print(f"DEBUG REQ Body: {request.content.decode()}")
+                else:
+                    print(f"DEBUG REQ Body: <{len(request.content)} bytes>")
+            except Exception:
+                print("DEBUG REQ Body: <undecodable content>")
 
     async def __aenter__(self) -> "JulesClient":
         """Enter async context manager."""
-        self._client = httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=self.timeout,
-            headers={
-                "X-Goog-Api-Key": self.api_key,
-                "Content-Type": "application/json",
-            },
-            event_hooks={"request": [self._log_request]},
-        )
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                base_url=self.base_url,
+                timeout=self.timeout,
+                headers={
+                    "X-Goog-Api-Key": self.api_key,
+                    "Content-Type": "application/json",
+                },
+                event_hooks={"request": [self._log_request]},
+            )
         return self
+
+    async def close(self) -> None:
+        """Close the underlying HTTP client."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None
 
     async def __aexit__(
         self,
@@ -83,9 +100,7 @@ class JulesClient:
         exc_tb: TracebackType | None,
     ) -> None:
         """Exit async context manager."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None
+        await self.close()
 
     @property
     def client(self) -> httpx.AsyncClient:

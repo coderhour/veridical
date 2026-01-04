@@ -1,4 +1,5 @@
 """Integration tests for the CLI."""
+
 from pathlib import Path
 
 import pytest
