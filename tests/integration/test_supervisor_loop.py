@@ -67,6 +67,7 @@ async def test_supervisor_iterative_repair(tmp_path) -> None:
     config.supervisor.max_consecutive_failures = 3
     config.supervisor.stagnation_threshold = 3
     mock_client = MagicMock()
+    mock_client.send_message = AsyncMock()  # For iteration 2 feedback
 
     with (
         patch("veridical.supervisor.loop.Dispatcher") as MockDispatcher,
@@ -86,10 +87,14 @@ async def test_supervisor_iterative_repair(tmp_path) -> None:
         mock_poller.wait_for_completion = AsyncMock(return_value=poll_result)
 
         mock_sync = MockSynchronizer.return_value
-        patch_res = PatchResult(
+        # Use different hashes to avoid stagnation detection
+        patch_res1 = PatchResult(
+            success=True, status=PatchStatus.APPLIED, files_changed=[], diff_hash="hash1"
+        )
+        patch_res2 = PatchResult(
             success=True, status=PatchStatus.APPLIED, files_changed=[], diff_hash="hash2"
         )
-        mock_sync.apply_session_patch = AsyncMock(return_value=patch_res)
+        mock_sync.apply_session_patch = AsyncMock(side_effect=[patch_res1, patch_res2])
         mock_sync.create_iteration_branch.side_effect = ["iter-1", "iter-2"]
         mock_sync.merge_to_main.return_value = "final_hash"
 
@@ -118,8 +123,10 @@ async def test_supervisor_iterative_repair(tmp_path) -> None:
         assert result.success
         assert result.iterations == 2
 
-        assert mock_disp.create_session.call_count == 2
-        # Mock calls might be out of order in assert_has_calls usage, but explicit checking is fine
+        # Session should only be created once (iteration 1)
+        # Iteration 2 sends feedback to existing session via send_message
+        assert mock_disp.create_session.call_count == 1
+        mock_client.send_message.assert_called_once()
         # Verify second prompt build included error context
         mock_disp.build_prompt.assert_called_with("Fix bug", "Error info")
 
@@ -133,6 +140,7 @@ async def test_supervisor_circuit_breaker(tmp_path) -> None:
     config.supervisor.stagnation_threshold = 3
 
     mock_client = MagicMock()
+    mock_client.send_message = AsyncMock()  # For feedback in iterations 2+
 
     with (
         patch("veridical.supervisor.loop.Dispatcher") as MockDispatcher,
@@ -149,10 +157,18 @@ async def test_supervisor_circuit_breaker(tmp_path) -> None:
         mock_poller.wait_for_completion = AsyncMock(return_value=poll_result)
 
         mock_sync = MockSynchronizer.return_value
-        patch_res = PatchResult(
-            success=True, status=PatchStatus.APPLIED, files_changed=[], diff_hash="hash"
-        )
-        mock_sync.apply_session_patch = AsyncMock(return_value=patch_res)
+        # Use different hashes to avoid stagnation detection
+        patch_hashes = iter(["hash1", "hash2", "hash3"])
+
+        def make_patch_result(*_args, **_kwargs):
+            return PatchResult(
+                success=True,
+                status=PatchStatus.APPLIED,
+                files_changed=[],
+                diff_hash=next(patch_hashes),
+            )
+
+        mock_sync.apply_session_patch = AsyncMock(side_effect=make_patch_result)
 
         mock_verifier = MockVerifier.return_value
         fail_res = VerificationResult(passed=False, gates=[], duration_seconds=1.0)
@@ -163,5 +179,11 @@ async def test_supervisor_circuit_breaker(tmp_path) -> None:
         result = await supervisor.run("Task")
 
         assert not result.success
+        # With max_iterations=2, iterations 1 and 2 run, then circuit breaker
+        # opens before iteration 3 can start (check happens after record_iteration)
         assert result.iterations == 3
         assert "Maximum iterations" in result.failure_reason
+        # Only one session created, subsequent iterations use send_message
+        mock_disp.create_session.assert_called_once()
+        # send_message called once for iteration 2 (iteration 3 doesn't run)
+        mock_client.send_message.assert_called_once()

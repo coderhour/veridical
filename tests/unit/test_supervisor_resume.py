@@ -140,15 +140,11 @@ class TestSupervisorSessionResume:
             assert result.iterations == 1
 
     @pytest.mark.asyncio
-    async def test_resume_then_iterate_creates_new_session(self, supervisor: Supervisor) -> None:
-        """Test that subsequent iterations create new sessions after resume."""
-        # Mock session creation for iteration 2
-        mock_session = SessionResponse(
-            name="sessions/new-session-789",
-            state=SessionState.RUNNING,
-        )
-
-        # Mock poll results
+    async def test_resume_then_iterate_sends_feedback_to_same_session(
+        self, supervisor: Supervisor
+    ) -> None:
+        """Test that subsequent iterations send feedback to the same session instead of creating new ones."""
+        # Mock poll results - both iterations use the same session
         now = datetime.now()
         poll_result_iter1 = PollResult(
             session_id="existing-session-123",
@@ -158,15 +154,16 @@ class TestSupervisorSessionResume:
             poll_count=1,
         )
         poll_result_iter2 = PollResult(
-            session_id="new-session-789",
+            session_id="existing-session-123",  # Same session
             final_state=SessionState.COMPLETED,
             started_at=now,
             completed_at=now,
             poll_count=1,
         )
 
-        # Mock patch results
-        patch_result = PatchResult.applied(files_changed=["test.py"], diff_hash="abc123")
+        # Mock patch results (different hashes to avoid stagnation detection)
+        patch_result1 = PatchResult.applied(files_changed=["test.py"], diff_hash="abc123")
+        patch_result2 = PatchResult.applied(files_changed=["test.py"], diff_hash="def456")
 
         # Mock verification results (fail first, pass second)
         verification_result_fail = VerificationResult(
@@ -180,10 +177,12 @@ class TestSupervisorSessionResume:
             duration_seconds=1.0,
         )
 
+        # Create a mock for the client's send_message method
+        mock_send_message = AsyncMock()
+
         with (
-            patch.object(
-                supervisor.dispatcher, "create_session", return_value=mock_session
-            ) as mock_create_session,
+            patch.object(supervisor.dispatcher, "create_session") as mock_create_session,
+            patch.object(supervisor.client, "send_message", mock_send_message),
             patch.object(
                 supervisor.poller,
                 "wait_for_completion",
@@ -192,7 +191,11 @@ class TestSupervisorSessionResume:
             patch.object(
                 supervisor.synchronizer, "create_iteration_branch", return_value="test-branch"
             ),
-            patch.object(supervisor.synchronizer, "apply_session_patch", return_value=patch_result),
+            patch.object(
+                supervisor.synchronizer,
+                "apply_session_patch",
+                side_effect=[patch_result1, patch_result2],
+            ),
             patch.object(
                 supervisor.verifier,
                 "run_all",
@@ -204,8 +207,13 @@ class TestSupervisorSessionResume:
         ):
             result = await supervisor.run("Test task", session_id="existing-session-123")
 
-            # Verify dispatcher was called once (for iteration 2, not iteration 1)
-            assert mock_create_session.call_count == 1
+            # Verify dispatcher was NOT called (we never create a new session)
+            mock_create_session.assert_not_called()
+
+            # Verify send_message was called for iteration 2
+            mock_send_message.assert_called_once()
+            call_args = mock_send_message.call_args
+            assert call_args[0][0] == "existing-session-123"  # Same session ID
 
             # Verify success after 2 iterations
             assert result.success

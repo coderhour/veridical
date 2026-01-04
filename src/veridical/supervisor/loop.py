@@ -98,6 +98,9 @@ class Supervisor:
 
         self._circuit_breaker.reset()
 
+        # Track the current session across iterations to reuse it
+        current_session_id: str | None = session_id
+
         while not self._circuit_breaker.is_open:
             self._circuit_breaker.record_iteration()
             if self._circuit_breaker.is_open:
@@ -106,16 +109,19 @@ class Supervisor:
             iteration = self._circuit_breaker.iteration_count
             logger.info(f"--- Starting Iteration {iteration} ---")
 
-            # Determine the session to use
-            current_session_id: str
-
-            # 1. DISPATCHING (skip if resuming on first iteration)
-            if session_id and iteration == 1:
+            # 1. DISPATCHING or SENDING FEEDBACK
+            if current_session_id and iteration == 1 and session_id:
                 # Resume existing session - skip dispatching
-                logger.info(f"Resuming existing session: {session_id}")
-                current_session_id = session_id
+                logger.info(f"Resuming existing session: {current_session_id}")
+            elif current_session_id and iteration > 1:
+                # Send feedback to existing session instead of creating new one
+                self._transition_to(SupervisorState.DISPATCHING)
+                logger.info(f"Sending feedback to existing session: {current_session_id}")
+
+                feedback_prompt = self.dispatcher.build_prompt(task_description, error_context)
+                await self.client.send_message(current_session_id, feedback_prompt)
             else:
-                # Normal dispatching flow
+                # First iteration - create new session
                 self._transition_to(SupervisorState.DISPATCHING)
                 prompt = self.dispatcher.build_prompt(task_description, error_context)
 
