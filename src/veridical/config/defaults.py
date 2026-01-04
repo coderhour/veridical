@@ -59,6 +59,11 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+# local_llm:
+#   base_url: http://localhost:11434/v1
+#   model: llama3
+#   timeout: 120
 """
 
 NODEJS_CONFIG_TEMPLATE = """\
@@ -98,6 +103,11 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+# local_llm:
+#   base_url: http://localhost:11434/v1
+#   model: llama3
+#   timeout: 120
 """
 
 ELIXIR_CONFIG_TEMPLATE = """\
@@ -141,6 +151,11 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+# local_llm:
+#   base_url: http://localhost:11434/v1
+#   model: llama3
+#   timeout: 120
 """
 
 JAVA_CONFIG_TEMPLATE = """\
@@ -186,6 +201,11 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+# local_llm:
+#   base_url: http://localhost:11434/v1
+#   model: llama3
+#   timeout: 120
 """
 
 GO_CONFIG_TEMPLATE = """\
@@ -229,6 +249,11 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+# local_llm:
+#   base_url: http://localhost:11434/v1
+#   model: llama3
+#   timeout: 120
 """
 
 RUST_CONFIG_TEMPLATE = """\
@@ -268,6 +293,11 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+# local_llm:
+#   base_url: http://localhost:11434/v1
+#   model: llama3
+#   timeout: 120
 """
 
 TYPESCRIPT_CONFIG_TEMPLATE = """\
@@ -311,6 +341,11 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+# local_llm:
+#   base_url: http://localhost:11434/v1
+#   model: llama3
+#   timeout: 120
 """
 
 RUBY_CONFIG_TEMPLATE = """\
@@ -346,6 +381,11 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+# local_llm:
+#   base_url: http://localhost:11434/v1
+#   model: llama3
+#   timeout: 120
 """
 
 PHP_CONFIG_TEMPLATE = """\
@@ -385,6 +425,11 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+# local_llm:
+#   base_url: http://localhost:11434/v1
+#   model: llama3
+#   timeout: 120
 """
 
 DOTNET_CONFIG_TEMPLATE = """\
@@ -424,6 +469,11 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+# local_llm:
+#   base_url: http://localhost:11434/v1
+#   model: llama3
+#   timeout: 120
 """
 
 
