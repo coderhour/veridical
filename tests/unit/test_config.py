@@ -11,6 +11,7 @@ from veridical.config.loader import (
     load_config,
     load_yaml_config,
 )
+from veridical.config.project_type import detect_project_type
 from veridical.config.schema import (
     GitConfig,
     JulesConfig,
@@ -147,24 +148,86 @@ class TestConfigLoading:
 
 
 @pytest.mark.unit
+class TestProjectTypeDetection:
+    """Tests for project type detection."""
+
+    def test_detect_python(self, temp_dir: Path) -> None:
+        """Test detecting Python project."""
+        (temp_dir / "pyproject.toml").touch()
+        assert detect_project_type(temp_dir) == "python"
+
+    def test_detect_javascript(self, temp_dir: Path) -> None:
+        """Test detecting JavaScript project."""
+        (temp_dir / "package.json").touch()
+        assert detect_project_type(temp_dir) == "javascript"
+
+    def test_detect_no_type(self, temp_dir: Path) -> None:
+        """Test no project type detected."""
+        assert detect_project_type(temp_dir) is None
+
+    def test_detect_both(self, temp_dir: Path) -> None:
+        """Test with both Python and JS files present."""
+        (temp_dir / "pyproject.toml").touch()
+        (temp_dir / "package.json").touch()
+        # JS is checked first
+        assert detect_project_type(temp_dir) == "javascript"
+
+
+@pytest.mark.unit
 class TestConfigTemplate:
     """Tests for configuration template generation."""
 
     def test_get_template(self) -> None:
-        """Test getting config template."""
+        """Test getting default (python) config template."""
         template = get_config_template()
         assert "jules:" in template
         assert "supervisor:" in template
         assert "verifier:" in template
         assert "git:" in template
+        assert "(Python)" in template
 
-    def test_generate_template(self, temp_dir: Path) -> None:
-        """Test generating template file."""
+    def test_get_python_template(self) -> None:
+        """Test getting python config template explicitly."""
+        template = get_config_template("python")
+        assert "(Python)" in template
+        assert "pytest" in template
+
+    def test_get_javascript_template(self) -> None:
+        """Test getting javascript config template."""
+        template = get_config_template("javascript")
+        assert "(JavaScript)" in template
+        assert "jest" in template
+
+    def test_generate_template_default(self, temp_dir: Path) -> None:
+        """Test generating template file with python default."""
+        (temp_dir / "pyproject.toml").touch()
         output = temp_dir / ".veridical.yaml"
         result = generate_config_template(output)
         assert result == output
         assert output.exists()
-        assert "jules:" in output.read_text()
+        assert "(Python)" in output.read_text()
+
+    def test_generate_template_js(self, temp_dir: Path) -> None:
+        """Test generating template file for javascript."""
+        (temp_dir / "package.json").touch()
+        output = temp_dir / ".veridical.yaml"
+        generate_config_template(output)
+        assert "(JavaScript)" in output.read_text()
+
+    def test_generate_template_explicit_type(self, temp_dir: Path) -> None:
+        """Test generating template with explicit type."""
+        output = temp_dir / ".veridical.yaml"
+        generate_config_template(output, project_type="javascript")
+        assert "(JavaScript)" in output.read_text()
+
+    def test_generate_template_no_detection(self, temp_dir: Path) -> None:
+        """Test error when no type detected."""
+        output = temp_dir / ".veridical.yaml"
+        with pytest.raises(ConfigurationError) as exc_info:
+            generate_config_template(output)
+        assert "Could not automatically detect project type" in str(
+            exc_info.value
+        )
 
     def test_generate_template_exists(self, temp_dir: Path) -> None:
         """Test generating template when file exists."""
@@ -172,7 +235,7 @@ class TestConfigTemplate:
         output.write_text("existing content")
 
         with pytest.raises(ConfigurationError) as exc_info:
-            generate_config_template(output)
+            generate_config_template(output, project_type="python")
         assert "already exists" in str(exc_info.value).lower()
 
     def test_generate_template_force(self, temp_dir: Path) -> None:
@@ -180,5 +243,9 @@ class TestConfigTemplate:
         output = temp_dir / ".veridical.yaml"
         output.write_text("existing content")
 
-        generate_config_template(output, force=True)
+        generate_config_template(
+            output,
+            force=True,
+            project_type="python",
+        )
         assert "jules:" in output.read_text()
