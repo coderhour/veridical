@@ -172,7 +172,8 @@ class Supervisor:
                 current_session_id,
             )
 
-            self._circuit_breaker.record_diff_hash(patch_result.diff_hash)
+            if patch_result.diff_hash is not None:
+                self._circuit_breaker.record_diff_hash(patch_result.diff_hash)
 
             if not patch_result.success:
                 self._circuit_breaker.record_failure()
