@@ -150,13 +150,25 @@ class TestConfigLoading:
 class TestConfigTemplate:
     """Tests for configuration template generation."""
 
-    def test_get_template(self) -> None:
-        """Test getting config template."""
+    def test_get_template_default(self) -> None:
+        """Test getting default python config template."""
         template = get_config_template()
         assert "jules:" in template
-        assert "supervisor:" in template
-        assert "verifier:" in template
-        assert "git:" in template
+        assert "pytest" in template
+        assert "ruff" in template
+
+    def test_get_template_python(self) -> None:
+        """Test getting python config template explicitly."""
+        template = get_config_template("python")
+        assert "jules:" in template
+        assert "pytest" in template
+        assert "ruff" in template
+
+    def test_get_template_nonexistent(self) -> None:
+        """Test getting a non-existent template."""
+        with pytest.raises(ConfigurationError) as exc_info:
+            get_config_template("nonexistent")
+        assert "template not found" in str(exc_info.value).lower()
 
     def test_generate_template(self, temp_dir: Path) -> None:
         """Test generating template file."""
