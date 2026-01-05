@@ -90,9 +90,7 @@ class Verifier:
         async def orchestrate() -> None:
             pending = set(tasks)
             while pending:
-                done, pending = await asyncio.wait(
-                    pending, return_when=asyncio.FIRST_COMPLETED
-                )
+                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
 
                 for task in done:
                     gate = gate_map[task]
@@ -110,9 +108,7 @@ class Verifier:
                     except asyncio.CancelledError:
                         pass  # Handled in the final collection step
                     except Exception as e:
-                        logger.error(
-                            f"Error running gate '{gate.name}': {e}", exc_info=True
-                        )
+                        logger.error(f"Error running gate '{gate.name}': {e}", exc_info=True)
                         results[gate.name] = GateResult(
                             name=gate.name,
                             status=GateStatus.FAILED,
@@ -121,13 +117,10 @@ class Verifier:
                         )
 
         try:
-            await asyncio.wait_for(
-                orchestrate(), timeout=self.config.verifier.parallel_timeout
-            )
+            await asyncio.wait_for(orchestrate(), timeout=self.config.verifier.parallel_timeout)
         except asyncio.TimeoutError:
             logger.error(
-                "Parallel gate execution timed out after "
-                f"{self.config.verifier.parallel_timeout}s."
+                f"Parallel gate execution timed out after {self.config.verifier.parallel_timeout}s."
             )
             for task in tasks:
                 if not task.done():
