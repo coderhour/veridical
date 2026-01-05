@@ -169,13 +169,14 @@ class Synchronizer:
         logger.info(f"Synchronizer: cleaning up branch {branch_name}")
         self.branch_manager.cleanup_branch(branch_name)
 
-    def merge_to_main(self, branch_name: str) -> str:
+    def merge_to_main(self, branch_name: str, task_description: str | None = None) -> str:
         """Merge a successful iteration to main.
 
         Commits any uncommitted changes first, then merges the branch.
 
         Args:
             branch_name: Name of the branch to merge
+            task_description: Description of the task for the commit message
 
         Returns:
             Commit hash after merge
@@ -186,7 +187,11 @@ class Synchronizer:
         # (patches are applied as uncommitted changes)
         if not self.git.is_clean():
             logger.info("Uncommitted changes found, committing before merge")
-            self.commit_changes(f"Veridical: verified changes from {branch_name}")
+            if task_description:
+                commit_msg = f"Veridical: {task_description}"
+            else:
+                commit_msg = f"Veridical: verified changes from {branch_name}"
+            self.commit_changes(commit_msg)
         else:
             logger.debug("Working directory is clean, no commit needed")
 

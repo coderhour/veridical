@@ -214,7 +214,7 @@ class Supervisor:
             if verification_result.passed:
                 # 5. SUCCESS
                 self._transition_to(SupervisorState.SUCCESS)
-                commit_hash = self.synchronizer.merge_to_main(iter_branch)
+                commit_hash = self.synchronizer.merge_to_main(iter_branch, task_description)
                 self._circuit_breaker.record_success()
 
                 return LoopResult(

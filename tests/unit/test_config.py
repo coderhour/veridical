@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from veridical.config.defaults import (
     DOTNET_CONFIG_TEMPLATE,
@@ -25,8 +26,6 @@ from veridical.config.loader import (
     load_config,
     load_yaml_config,
 )
-from pydantic import ValidationError
-
 from veridical.config.schema import (
     ConstantBackoffConfig,
     ExponentialBackoffConfig,

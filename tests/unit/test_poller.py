@@ -31,9 +31,7 @@ class TestBackoffFactory:
 
     def test_create_exponential_backoff(self) -> None:
         """Test creating an exponential backoff strategy."""
-        config = ExponentialBackoffConfig(
-            base_interval=5, max_interval=50, jitter_factor=0.2
-        )
+        config = ExponentialBackoffConfig(base_interval=5, max_interval=50, jitter_factor=0.2)
         strategy = create_backoff_strategy(config)
         assert isinstance(strategy, ExponentialBackoff)
         assert strategy.base_interval == 5
@@ -81,7 +79,7 @@ class TestPoller:
         """Test poller initialization with a custom backoff strategy."""
 
         class CustomBackoff(BackoffStrategy):
-            def get_delay(self, attempt: int) -> float:
+            def get_delay(self, _attempt: int) -> float:
                 return 1.0
 
             def reset(self) -> None:
