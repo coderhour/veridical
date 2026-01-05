@@ -1,8 +1,10 @@
 """Unit tests for parallel quality gate execution in the Verifier."""
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
 from veridical.config.schema import QualityGate
 from veridical.models.result import GateResult, GateStatus
 from veridical.verifier.quality_gate import Verifier
@@ -74,6 +76,7 @@ async def test_run_parallel_batch_success(verifier):
         QualityGate(name="p1", command="cmd", parallel=True, required=True),
         QualityGate(name="p2", command="cmd", parallel=True, required=False),
     ]
+
     async def side_effect(gate):
         if gate.name == "p1":
             return GateResult(name="p1", status=GateStatus.PASSED, output="", duration_seconds=1.0)
@@ -101,7 +104,9 @@ async def test_run_parallel_batch_required_failure(verifier):
         if gate.name == "p1":
             await asyncio.sleep(0.01)  # Fail fast
             completed_gates.append(gate.name)
-            return GateResult(name="p1", status=GateStatus.FAILED, output="fail", duration_seconds=0.01)
+            return GateResult(
+                name="p1", status=GateStatus.FAILED, output="fail", duration_seconds=0.01
+            )
 
         await asyncio.sleep(0.1)  # Others take longer
         completed_gates.append(gate.name)
@@ -133,7 +138,9 @@ async def test_run_parallel_batch_optional_failure(verifier):
 
     async def side_effect(gate):
         if gate.name == "p1":
-            return GateResult(name="p1", status=GateStatus.FAILED, output="fail", duration_seconds=1.0)
+            return GateResult(
+                name="p1", status=GateStatus.FAILED, output="fail", duration_seconds=1.0
+            )
         return GateResult(name="p2", status=GateStatus.PASSED, output="", duration_seconds=1.0)
 
     verifier._run_gate_logic = AsyncMock(side_effect=side_effect)
@@ -148,7 +155,7 @@ async def test_run_parallel_batch_timeout(verifier):
     gates = [QualityGate(name="p1", command="cmd", parallel=True)]
     verifier.config.verifier.parallel_timeout = 0.01
 
-    async def long_running_gate(*args, **kwargs):
+    async def long_running_gate(*_args, **_kwargs):
         await asyncio.sleep(0.1)
         return GateResult(name="p1", status=GateStatus.PASSED, output="", duration_seconds=0.1)
 
