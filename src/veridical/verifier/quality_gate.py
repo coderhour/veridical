@@ -61,7 +61,7 @@ class Verifier:
         if not gates:
             return []
 
-        batches: list[list["QualityGate"]] = []
+        batches: list[list[QualityGate]] = []
         i = 0
         while i < len(gates):
             gate = gates[i]
@@ -71,7 +71,7 @@ class Verifier:
                 i += 1
             else:
                 # Group consecutive parallel gates into a single batch
-                parallel_batch: list["QualityGate"] = []
+                parallel_batch: list[QualityGate] = []
                 while i < len(gates) and gates[i].parallel:
                     parallel_batch.append(gates[i])
                     i += 1
@@ -84,7 +84,7 @@ class Verifier:
             return []
 
         tasks = [asyncio.create_task(self._run_gate_logic(gate)) for gate in batch]
-        gate_map = {task: gate for task, gate in zip(tasks, batch)}
+        gate_map = dict(zip(tasks, batch, strict=True))
         results: dict[str, GateResult] = {}
 
         async def orchestrate() -> None:
@@ -118,7 +118,7 @@ class Verifier:
 
         try:
             await asyncio.wait_for(orchestrate(), timeout=self.config.verifier.parallel_timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(
                 f"Parallel gate execution timed out after {self.config.verifier.parallel_timeout}s."
             )
@@ -128,7 +128,7 @@ class Verifier:
 
         # Collect final results for all tasks
         final_results: dict[str, GateResult] = {}
-        for task, gate in zip(tasks, batch):
+        for task, gate in zip(tasks, batch, strict=True):
             if gate.name in results:
                 final_results[gate.name] = results[gate.name]
                 continue
