@@ -1,6 +1,7 @@
 """Async HTTP client for the Jules API."""
 
 import asyncio
+import logging
 from types import TracebackType
 from typing import Any
 
@@ -14,6 +15,8 @@ from veridical.api.models import (
     SendMessageRequest,
     SessionResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class JulesClient:
@@ -56,22 +59,22 @@ class JulesClient:
     @staticmethod
     async def _log_request(request: httpx.Request) -> None:
         """Log request details for debugging."""
-        print(f"DEBUG REQ: {request.method} {request.url}")
+        logger.debug(f"HTTP Request: {request.method} {request.url}")
         for name, value in request.headers.items():
             if name.lower() == "x-goog-api-key":
-                print(f"DEBUG REQ Header: {name}: {'*' * len(value)}")
+                logger.debug(f"Header: {name}: {'*' * len(value)}")
             else:
-                print(f"DEBUG REQ Header: {name}: {value}")
+                logger.debug(f"Header: {name}: {value}")
         if request.content:
             try:
                 # Avoid decoding large binary or non-text content
                 ctype = request.headers.get("Content-Type", "").lower()
                 if "application/json" in ctype or "text/" in ctype:
-                    print(f"DEBUG REQ Body: {request.content.decode()}")
+                    logger.debug(f"Body: {request.content.decode()}")
                 else:
-                    print(f"DEBUG REQ Body: <{len(request.content)} bytes>")
+                    logger.debug(f"Body: <{len(request.content)} bytes>")
             except Exception:
-                print("DEBUG REQ Body: <undecodable content>")
+                logger.debug("Body: <undecodable content>")
 
     async def __aenter__(self) -> "JulesClient":
         """Enter async context manager."""
@@ -137,11 +140,11 @@ class JulesClient:
 
         for attempt in range(self.max_retries + 1):
             try:
-                # Debug logging
+                # Detailed logging only at DEBUG level
                 full_url = str(self.client.base_url.join(path))
-                print(f"DEBUG: {method} {full_url}")
+                logger.debug(f"API Request: {method} {full_url}")
                 if "json" in kwargs:
-                    print(f"DEBUG: Payload: {kwargs['json']}")
+                    logger.debug(f"Payload: {kwargs['json']}")
 
                 response = await self.client.request(method, path, **kwargs)
 
@@ -161,7 +164,7 @@ class JulesClient:
 
                 # Raise for other error status codes
                 if response.status_code >= 400:
-                    print(f"DEBUG: Response body: {response.text}")
+                    logger.debug(f"Response body: {response.text}")
                     raise APIError(
                         f"API request failed: {response.status_code}",
                         status_code=response.status_code,
@@ -170,7 +173,7 @@ class JulesClient:
 
                 # Debug log successful response
                 if response.status_code < 300:
-                    print(f"DEBUG: Response body: {response.text}")
+                    logger.debug(f"Response body: {response.text}")
 
                 return response
 
@@ -208,12 +211,15 @@ class JulesClient:
         Returns:
             Created session information
         """
+        logger.info("Creating Jules session...")
         response = await self._request_with_retry(
             "POST",
             "/sessions",
             json=request.model_dump_api(),
         )
-        return SessionResponse.model_validate(response.json())
+        session = SessionResponse.model_validate(response.json())
+        logger.info(f"Session created: {session.session_id}")
+        return session
 
     async def get_session(self, session_id: str) -> SessionResponse:
         """Get the current status of a session.
@@ -250,6 +256,7 @@ class JulesClient:
             session_id: ID of the session
             message: Message to send
         """
+        logger.info(f"Sending message to session {session_id}...")
         request = SendMessageRequest(prompt=message)
         await self._request_with_retry(
             "POST",
@@ -283,6 +290,7 @@ class JulesClient:
         Returns:
             Unified diff content
         """
+        logger.info(f"Downloading patch for session {session_id}...")
         activities = await self.get_activities(session_id)
 
         # Iterate in reverse to find the most recent patch

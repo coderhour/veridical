@@ -101,6 +101,7 @@ class Poller:
 
         self.backoff.reset()
 
+        last_state = None
         while True:
             # Check timeout
             elapsed = (datetime.now() - started_at).total_seconds()
@@ -114,8 +115,11 @@ class Poller:
             # Poll current status
             session = await self.api_client.get_session(session_id)
             poll_count += 1
+            logger.info(f"Polling {poll_count}: Session {session_id} state: {session.state}")
 
-            logger.debug(f"Session {session_id} state: {session.state} (poll #{poll_count})")
+            if session.state != last_state:
+                logger.info(f"Session {session_id} state: {session.state}")
+                last_state = session.state
 
             # Check for terminal state
             if session.state in (SessionState.COMPLETED, SessionState.FAILED):

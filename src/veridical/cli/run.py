@@ -36,9 +36,15 @@ def run_supervisor(
         # Load configuration
         config = load_config(config_path)
 
-        # Override config with CLI options
         if max_iterations:
             config.supervisor.max_iterations = max_iterations
+
+        # Re-configure logging based on config file
+        from veridical.logging_config import setup_logging
+
+        setup_logging(
+            level=config.log_level, verbose=os.environ.get("VERIDICAL_VERBOSE") == "true" or False
+        )
 
         # Get API key
         api_key = os.environ.get("JULES_API_KEY")

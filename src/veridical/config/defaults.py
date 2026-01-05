@@ -60,6 +60,8 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+log_level: info
 """
 
 NODEJS_CONFIG_TEMPLATE = """\
@@ -100,6 +102,8 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+log_level: info
 """
 
 ELIXIR_CONFIG_TEMPLATE = """\
@@ -144,6 +148,8 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+log_level: info
 """
 
 JAVA_CONFIG_TEMPLATE = """\
@@ -190,6 +196,8 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+log_level: info
 """
 
 GO_CONFIG_TEMPLATE = """\
@@ -234,6 +242,8 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+log_level: info
 """
 
 RUST_CONFIG_TEMPLATE = """\
@@ -274,6 +284,8 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+log_level: info
 """
 
 TYPESCRIPT_CONFIG_TEMPLATE = """\
@@ -318,6 +330,8 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+log_level: info
 """
 
 RUBY_CONFIG_TEMPLATE = """\
@@ -354,6 +368,8 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+log_level: info
 """
 
 PHP_CONFIG_TEMPLATE = """\
@@ -394,6 +410,8 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+log_level: info
 """
 
 DOTNET_CONFIG_TEMPLATE = """\
@@ -434,6 +452,8 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+
+log_level: info
 """
 
 

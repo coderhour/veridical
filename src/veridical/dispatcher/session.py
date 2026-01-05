@@ -91,10 +91,9 @@ class Dispatcher:
         Returns:
             Created session information
         """
-        logger.info("Creating Jules session...")
         target_branch = branch or self.config.git.base_branch
-        logger.info(
-            f"Creating session with prompt length {len(prompt)} and target branch '{target_branch}'..."
+        logger.debug(
+            f"Dispatching session with prompt length {len(prompt)} and target branch '{target_branch}'"
         )
 
         if source:

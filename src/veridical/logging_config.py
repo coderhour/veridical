@@ -4,17 +4,19 @@ from pathlib import Path
 
 
 def setup_logging(
-    level: int = logging.INFO, log_file: Path | None = None, verbose: bool = False
+    level: int | str = logging.INFO, log_file: Path | None = None, verbose: bool = False
 ) -> None:
     """Configure logging for Veridical.
 
     Args:
-        level: Logging level
+        level: Logging level (int or str)
         log_file: Optional path to a log file
         verbose: If True, set level to DEBUG
     """
     if verbose:
         level = logging.DEBUG
+    elif isinstance(level, str):
+        level = getattr(logging, level.upper(), logging.INFO)
 
     handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
 
