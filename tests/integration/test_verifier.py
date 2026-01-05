@@ -2,9 +2,17 @@
 
 from pathlib import Path
 
-import pytest
+import asyncio
 
-from veridical.config.schema import QualityGate, VeridicalConfig, VerifierConfig
+import pytest
+from unittest.mock import AsyncMock, patch
+
+from veridical.config.schema import (
+    LocalLLMConfig,
+    QualityGate,
+    VeridicalConfig,
+    VerifierConfig,
+)
 from veridical.verifier.quality_gate import Verifier
 
 
@@ -71,3 +79,55 @@ async def test_verifier_with_task_completion_gate_failure(tmp_path: Path) -> Non
     assert result.gates[0].name == "task_check"
     assert result.gates[0].passed is False
     assert "Task 2" in result.gates[0].error_output
+
+
+@pytest.mark.integration
+@patch("veridical.verifier.quality_gate.logger")
+@patch("veridical.verifier.quality_gate.LLDClient")
+async def test_verifier_with_llm_analyzer(
+    mock_lld_client, mock_logger, tmp_path: Path
+) -> None:
+    """Test that Verifier initializes and uses LogAnalyzer when configured."""
+    mock_client_instance = mock_lld_client.return_value
+    mock_client_instance.summarize_text = AsyncMock(return_value="LLM summary")
+
+    llm_config = LocalLLMConfig(base_url="http://mock", model="mock-model")
+    config = VeridicalConfig(
+        verifier=VerifierConfig(
+            quality_gates=[
+                QualityGate(name="failing_command", type="command", command="exit 1")
+            ],
+            local_llm=llm_config,
+        )
+    )
+
+    verifier = Verifier(config, tmp_path)
+    result = await verifier.run_all()
+    feedback = await verifier.generate_feedback(result)
+
+    assert "LLM summary" in feedback
+    mock_client_instance.summarize_text.assert_called_once()
+
+
+@pytest.mark.integration
+@patch("veridical.verifier.quality_gate.LLDClient", None)
+async def test_verifier_without_llm_packages(tmp_path: Path) -> None:
+    """Test that Verifier falls back gracefully when LLM packages are not installed."""
+    llm_config = LocalLLMConfig(base_url="http://mock", model="mock-model")
+    config = VeridicalConfig(
+        verifier=VerifierConfig(
+            quality_gates=[
+                QualityGate(name="failing_command", type="command", command="exit 1")
+            ],
+            local_llm=llm_config,
+        )
+    )
+
+    verifier = Verifier(config, tmp_path)
+    assert verifier.feedback_generator._analyzer is None
+
+    result = await verifier.run_all()
+    feedback = await verifier.generate_feedback(result)
+
+    assert "LLM summary" not in feedback
+    assert "..." in feedback or "(no output)" in feedback

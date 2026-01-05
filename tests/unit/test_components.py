@@ -199,16 +199,17 @@ class TestBackoff:
 
 
 @pytest.mark.unit
+@pytest.mark.asyncio
 class TestFeedbackGenerator:
     """Tests for FeedbackGenerator."""
 
-    def test_no_feedback_on_success(self) -> None:
+    async def test_no_feedback_on_success(self) -> None:
         """Test empty feedback when all gates pass."""
         gen = FeedbackGenerator()
         result = VerificationResult(passed=True, gates=[], duration_seconds=1.0)
-        assert gen.generate_feedback(result) == ""
+        assert await gen.generate_feedback(result) == ""
 
-    def test_feedback_on_failure(self) -> None:
+    async def test_feedback_on_failure(self) -> None:
         """Test feedback generation on failure."""
         gen = FeedbackGenerator()
         result = VerificationResult(
@@ -226,11 +227,11 @@ class TestFeedbackGenerator:
             ],
             duration_seconds=1.0,
         )
-        feedback = gen.generate_feedback(result)
+        feedback = await gen.generate_feedback(result)
         assert "pytest" in feedback
         assert "FAILED" in feedback
 
-    def test_feedback_truncation(self) -> None:
+    async def test_feedback_truncation(self) -> None:
         """Test feedback truncation."""
         gen = FeedbackGenerator(max_length=50)
         result = VerificationResult(
@@ -248,6 +249,6 @@ class TestFeedbackGenerator:
             ],
             duration_seconds=1.0,
         )
-        feedback = gen.generate_feedback(result)
+        feedback = await gen.generate_feedback(result)
         assert len(feedback) <= 50
         assert feedback.endswith("...")

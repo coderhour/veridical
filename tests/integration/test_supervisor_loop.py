@@ -115,7 +115,7 @@ async def test_supervisor_iterative_repair(tmp_path) -> None:
 
         mock_verifier.run_all.side_effect = verify_side_effect
 
-        mock_verifier.generate_feedback.return_value = "Error info"
+        mock_verifier.generate_feedback = AsyncMock(return_value="Error info")
 
         supervisor = Supervisor(config, mock_client, tmp_path)
         result = await supervisor.run("Fix bug")
@@ -173,7 +173,7 @@ async def test_supervisor_circuit_breaker(tmp_path) -> None:
         mock_verifier = MockVerifier.return_value
         fail_res = VerificationResult(passed=False, gates=[], duration_seconds=1.0)
         mock_verifier.run_all = AsyncMock(return_value=fail_res)
-        mock_verifier.generate_feedback.return_value = "Error"
+        mock_verifier.generate_feedback = AsyncMock(return_value="Error")
 
         supervisor = Supervisor(config, mock_client, tmp_path)
         result = await supervisor.run("Task")

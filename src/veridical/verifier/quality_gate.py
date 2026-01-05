@@ -7,12 +7,19 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from veridical.models.result import GateResult, GateStatus, VerificationResult
+from veridical.verifier.analysis import LogAnalyzer
 from veridical.verifier.feedback import FeedbackGenerator
 from veridical.verifier.runner import CommandRunner
 from veridical.verifier.task_completion import verify_task_completion
 
 if TYPE_CHECKING:
     from veridical.config.schema import QualityGate, VeridicalConfig
+
+# Conditional import for LLM dependencies
+try:
+    from veridical.lld.client import LLDClient
+except ImportError:
+    LLDClient = None
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +47,23 @@ class Verifier:
         self.config = config
         self.repo_path = repo_path
         self.runner = CommandRunner(repo_path)
+        self.current_tasks_file: Path | None = None
+
+        analyzer: LogAnalyzer | None = None
+        if config.verifier.local_llm and LLDClient:
+            client = LLDClient(config.verifier.local_llm)
+            analyzer = LogAnalyzer(client)
+            logger.info("Local LLM for log analysis is configured.")
+        elif config.verifier.local_llm:
+            logger.warning(
+                "LLM packages not installed. "
+                "Please run `uv sync --all-extras` to enable LLM analysis."
+            )
+
         self.feedback_generator = FeedbackGenerator(
             max_length=config.verifier.summary_max_length,
+            analyzer=analyzer,
         )
-        self.current_tasks_file: Path | None = None
 
     async def _run_gate_logic(self, gate: "QualityGate") -> GateResult:
         """Run the logic for a single gate based on its type."""
@@ -133,7 +153,7 @@ class Verifier:
             duration_seconds=duration,
         )
 
-    def generate_feedback(self, result: VerificationResult) -> str:
+    async def generate_feedback(self, result: VerificationResult) -> str:
         """Generate error feedback from a verification result.
 
         Args:
@@ -142,4 +162,4 @@ class Verifier:
         Returns:
             Error context string for the next iteration
         """
-        return self.feedback_generator.generate_feedback(result)
+        return await self.feedback_generator.generate_feedback(result)

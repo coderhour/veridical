@@ -55,6 +55,10 @@ verifier:
       timeout: 120
       required: true
   summary_max_length: 2000
+  # local_llm:
+  #   base_url: http://localhost:11434/v1
+  #   model: "codellama:7b-instruct"
+  #   timeout: 120
 
 git:
   base_branch: main
