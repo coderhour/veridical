@@ -225,7 +225,22 @@ veridical config init --template php
 veridical config init --template dotnet
 ```
 
-This will generate a configuration file with sensible defaults for the chosen language. For example, the `nodejs` template will include quality gates for `npm test`, `eslint`, and `prettier`.
+This will generate a configuration file with sensible defaults for the chosen language.
+
+### Supported Templates
+
+| Template | Key Quality Gates |
+| :--- | :--- |
+| `python` | `pytest`, `ruff check`, `ruff format`, `mypy` |
+| `nodejs` | `npm test`, `eslint`, `prettier` |
+| `elixir` | `mix test`, `credo`, `mix format`, `dialyzer` |
+| `java` | `gradlew test`, `checkstyle` |
+| `go` | `go test`, `go vet`, `golangci-lint`, `gofmt` |
+| `rust` | `cargo test`, `cargo clippy`, `cargo fmt` |
+| `typescript` | `npm test`, `tsc`, `eslint`, `prettier` |
+| `ruby` | `rspec`, `rubocop` |
+| `php` | `phpunit`, `phpstan`, `php-cs-fixer` |
+| `dotnet` | `dotnet test`, `dotnet format`, `dotnet build` |
 
 ### Environment Variables
 
