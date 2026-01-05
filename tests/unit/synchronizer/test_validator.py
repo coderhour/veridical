@@ -1,6 +1,7 @@
 """Unit tests for the ScopeValidator."""
 
 import pytest
+
 from veridical.config.schema import ScopeValidationConfig
 from veridical.synchronizer.validator import ScopeValidator
 

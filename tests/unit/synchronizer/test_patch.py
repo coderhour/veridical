@@ -4,7 +4,6 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 from veridical.config.schema import ScopeValidationConfig
 from veridical.models.result import PatchStatus
 from veridical.synchronizer.patch import PatchApplier
