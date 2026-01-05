@@ -65,6 +65,14 @@ class PatchApplier:
             else:
                 logger.warning(f"Scope violations found (non-strict mode):\n{violations_str}")
 
+        # Check if human review is required for any files
+        if validation_result.review_required:
+            files_str = ", ".join(validation_result.review_required)
+            logger.info(f"Patch requires human approval for: {files_str}")
+            return PatchResult.pending_review(
+                review_required_files=validation_result.review_required,
+            )
+
         try:
             logger.info("Applying patch...")
             # Write patch to temp file and apply

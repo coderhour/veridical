@@ -15,6 +15,7 @@ class ValidationResult:
 
     is_valid: bool = True
     violations: list[str] = field(default_factory=list)
+    review_required: list[str] = field(default_factory=list)
 
 
 class ScopeValidator:
@@ -35,7 +36,7 @@ class ScopeValidator:
             patch_data: Unified diff patch content
 
         Returns:
-            Validation result with any violations found
+            Validation result with any violations found and files requiring review
         """
         if not patch_data.strip():
             return ValidationResult()
@@ -44,14 +45,24 @@ class ScopeValidator:
         logger.debug(f"Validating modified files: {modified_files}")
 
         violations: list[str] = []
+        review_required: list[str] = []
+
         for file_path in modified_files:
             if self._is_denied(file_path):
                 violations.append(f"Modification of '{file_path}' is denied by denylist.")
+            elif self._requires_review(file_path):
+                review_required.append(file_path)
             elif self.config.allowlist and not self._is_allowed(file_path):
                 violations.append(f"Modification of '{file_path}' is not in allowlist.")
 
         if violations:
-            return ValidationResult(is_valid=False, violations=violations)
+            return ValidationResult(
+                is_valid=False, violations=violations, review_required=review_required
+            )
+
+        if review_required:
+            logger.info(f"Files requiring human review: {review_required}")
+            return ValidationResult(is_valid=True, review_required=review_required)
 
         return ValidationResult()
 
@@ -111,3 +122,22 @@ class ScopeValidator:
             # If no allowlist, everything is allowed by default (denylist still applies)
             return True
         return any(fnmatch.fnmatch(file_path, pattern) for pattern in self.config.allowlist)
+
+    def _requires_review(self, file_path: str) -> bool:
+        """Check if a file path requires human review.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            True if the file requires review, False otherwise
+        """
+        if not self.config.reviewlist:
+            return False
+        for pattern in self.config.reviewlist:
+            if pattern.endswith("/"):
+                if file_path.startswith(pattern):
+                    return True
+            elif fnmatch.fnmatch(file_path, pattern):
+                return True
+        return False

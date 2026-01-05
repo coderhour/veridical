@@ -196,8 +196,67 @@ class ScopeValidationConfig(BaseModel):
         description="List of glob patterns for files that are allowed to be modified.",
     )
     denylist: list[str] | None = Field(
-        default_factory=lambda: [".github/", ".gitlab-ci.yml", "AGENTS.md", "*.env"],
+        default_factory=lambda: [
+            # CI/CD configurations
+            ".github/",
+            ".gitlab-ci.yml",
+            ".gitlab/",
+            ".circleci/",
+            "Jenkinsfile",
+            ".travis.yml",
+            "azure-pipelines.yml",
+            ".buildkite/",
+            # Secrets and credentials
+            "*.env",
+            ".env*",
+            "*.pem",
+            "*.key",
+            "*.crt",
+            "*.p12",
+            "*.pfx",
+            "*credentials*",
+            "*secrets*",
+            ".netrc",
+            ".npmrc",
+            ".pypirc",
+            # Infrastructure and deployment
+            "terraform/",
+            "*.tf",
+            "*.tfvars",
+            "pulumi/",
+            "Pulumi.yaml",
+            "kubernetes/",
+            "k8s/",
+            "helm/",
+            "docker-compose*.yml",
+            "Dockerfile*",
+            # Security policies and configs
+            "CODEOWNERS",
+            "SECURITY.md",
+            ".securityrc",
+            # AI agent instructions (prevent self-modification)
+            "AGENTS.md",
+            "CLAUDE.md",
+            ".cursorrules",
+            ".windsurfrules",
+        ],
         description="List of glob patterns for files that are not allowed to be modified.",
+    )
+    reviewlist: list[str] | None = Field(
+        default_factory=lambda: [
+            # Package lock files (supply chain security - require human approval)
+            "package-lock.json",
+            "yarn.lock",
+            "pnpm-lock.yaml",
+            "poetry.lock",
+            "Pipfile.lock",
+            "Cargo.lock",
+            "Gemfile.lock",
+            "composer.lock",
+            "uv.lock",
+            "mix.lock",
+        ],
+        description="List of glob patterns for files that require explicit human approval.",
     )
     strict_mode: bool = Field(
         True,

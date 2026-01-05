@@ -127,6 +127,7 @@ class PatchStatus(str, Enum):
     FAILED = "failed"
     CONFLICT = "conflict"
     REJECTED = "rejected"
+    PENDING_REVIEW = "pending_review"
 
 
 class PatchResult(BaseModel):
@@ -143,6 +144,10 @@ class PatchResult(BaseModel):
     )
     error: str | None = Field(None, description="Error message if application failed")
     diff_hash: str | None = Field(None, description="Hash of the applied diff")
+    review_required_files: list[str] = Field(
+        default_factory=list,
+        description="Files that require human approval before applying",
+    )
 
     @classmethod
     def applied(cls, files_changed: list[str], diff_hash: str) -> "PatchResult":
@@ -161,4 +166,16 @@ class PatchResult(BaseModel):
             success=False,
             status=status,
             error=error,
+        )
+
+    @classmethod
+    def pending_review(
+        cls, review_required_files: list[str], files_changed: list[str] | None = None
+    ) -> "PatchResult":
+        """Create a result indicating human review is required."""
+        return cls(
+            success=False,
+            status=PatchStatus.PENDING_REVIEW,
+            files_changed=files_changed or [],
+            review_required_files=review_required_files,
         )

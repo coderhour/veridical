@@ -1,29 +1,60 @@
 # Veridical Configuration Template
 # See https://github.com/veridical/veridical for documentation
 
+# ------------------------------------------------------------------------------
+# Logging Configuration
+# ------------------------------------------------------------------------------
+
+# Log level for Veridical output
+# Available values: DEBUG, INFO, WARNING, ERROR, CRITICAL
+log_level: INFO
+
+# ------------------------------------------------------------------------------
 # Jules API Configuration
+# ------------------------------------------------------------------------------
 jules:
   # Base URL for the Jules API
   api_base_url: https://jules.googleapis.com/v1alpha
 
+  # Strategy for polling interval backoff
+  # Available values: constant, exponential
+  backoff_strategy: constant
+
   # Polling interval in seconds when waiting for session completion
+  # Used when backoff_strategy is "constant"
   poll_interval: 30
 
+  # Detailed backoff configuration (optional, overrides poll_interval)
+  # For constant backoff:
+  # backoff:
+  #   type: constant
+  #   interval: 30.0
+  #
+  # For exponential backoff:
+  # backoff:
+  #   type: exponential
+  #   base_interval: 30.0
+  #   max_interval: 300.0
+  #   jitter_factor: 0.1
+
   # Maximum time (in seconds) to wait for a session to complete
+  # Minimum: 60
   poll_timeout: 3600
 
   # Automatically approve plans without human intervention
   auto_approve_plans: true
 
-  # Maximum retry attempts for failed API calls
+  # Maximum retry attempts for failed API calls (0-10)
   max_retries: 3
 
-  # Base delay between retries (exponential backoff applied)
+  # Base delay between retries in seconds (minimum: 0.1)
   retry_delay: 1.0
 
+# ------------------------------------------------------------------------------
 # Supervisor Loop Configuration
+# ------------------------------------------------------------------------------
 supervisor:
-  # Maximum number of fix iterations before giving up
+  # Maximum number of fix iterations before giving up (1-100)
   max_iterations: 10
 
   # Number of consecutive failures before circuit breaker trips
@@ -32,22 +63,29 @@ supervisor:
   # Number of identical diffs before detecting stagnation
   stagnation_threshold: 3
 
+# ------------------------------------------------------------------------------
 # Verifier Configuration
+# ------------------------------------------------------------------------------
 verifier:
   # Timeout in seconds for batches of parallel gates
   parallel_timeout: 600
 
-  # Quality gates to run for verification. Gates with `parallel: true`
-  # will be grouped into batches and run concurrently.
+  # Maximum length of error summaries sent back to Jules
+  summary_max_length: 2000
+
+  # Quality gates to run for verification
+  # Gates with `parallel: true` will be grouped into batches and run concurrently
+  # Gate types: command, task_completion
   quality_gates:
-    # Example of a sequential gate (default)
+    # Task completion gate (checks tasks.md for completion status)
     - name: task_completion
       type: task_completion
-      path: "auto" # Veridical will find the relevant spec's tasks.md
+      path: "auto"  # "auto" finds the relevant spec's tasks.md
       required: true
 
-    # Example of parallel gates
+    # Command gates (run shell commands)
     - name: pytest
+      type: command  # default, can be omitted
       command: pytest
       timeout: 300
       required: true
@@ -71,10 +109,17 @@ verifier:
       required: true
       parallel: true
 
-  # Maximum length of error summaries sent back to Jules
-  summary_max_length: 2000
+  # Optional: Local LLM for advanced log analysis (e.g., Ollama)
+  # local_llm:
+  #   base_url: http://localhost:11434/v1
+  #   model: qwen2.5:7b
+  #   api_key: ollama  # optional, use "ollama" for Ollama
+  #   timeout: 30
+  #   chunk_size: 500
 
+# ------------------------------------------------------------------------------
 # Git Configuration
+# ------------------------------------------------------------------------------
 git:
   # Base branch to create iteration branches from
   base_branch: main
@@ -84,3 +129,35 @@ git:
 
   # Automatically delete iteration branches after successful merge
   auto_cleanup: true
+
+  # Automatically create a work branch for changes instead of merging to base_branch
+  # When true, creates a feature branch like "feat/task-description"
+  # When false, merges directly to base_branch (legacy behavior)
+  auto_create_work_branch: true
+
+  # Scope validation for incoming patches (security)
+  scope_validation:
+    # Files explicitly allowed to be modified (glob patterns)
+    # If set, ONLY matching files can be modified (allowlist mode)
+    # allowlist:
+    #   - "src/**/*.py"
+    #   - "tests/**/*.py"
+
+    # Files that are NEVER allowed to be modified (rejected outright)
+    # Default includes: CI/CD configs, secrets, infrastructure, AI agent files
+    # denylist:
+    #   - ".github/"
+    #   - "*.env"
+    #   - "*.pem"
+    #   - "AGENTS.md"
+
+    # Files that require explicit human approval before applying
+    # Default includes package lock files for supply chain security
+    # reviewlist:
+    #   - "package-lock.json"
+    #   - "poetry.lock"
+    #   - "yarn.lock"
+
+    # If true (default), patches violating scope are rejected
+    # If false, violations are logged as warnings but patch proceeds
+    strict_mode: true
