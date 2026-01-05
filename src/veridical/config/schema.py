@@ -125,6 +125,35 @@ class SupervisorConfig(BaseModel):
     )
 
 
+class LocalLLMConfig(BaseModel):
+    """Configuration for local LLM integration."""
+
+    base_url: str = Field(
+        ...,
+        description="Base URL for OpenAI-compatible local LLM endpoint (e.g., http://localhost:11434/v1)",
+    )
+    model: str = Field(
+        ...,
+        description="Model name to use for log analysis (e.g., qwen2.5:7b, llama3.2:8b)",
+    )
+    api_key: str | None = Field(
+        None,
+        description="API key for the local LLM endpoint (optional, use 'ollama' for Ollama)",
+    )
+    timeout: int = Field(
+        30,
+        ge=1,
+        le=300,
+        description="Timeout in seconds per LLM request",
+    )
+    chunk_size: int = Field(
+        500,
+        ge=100,
+        le=2000,
+        description="Number of lines per chunk for recursive summarization",
+    )
+
+
 class VerifierConfig(BaseModel):
     """Configuration for the verifier component."""
 
@@ -146,6 +175,10 @@ class VerifierConfig(BaseModel):
         2000,
         ge=100,
         description="Maximum length of error summary for feedback",
+    )
+    local_llm: LocalLLMConfig | None = Field(
+        None,
+        description="Optional local LLM configuration for advanced log analysis",
     )
 
 

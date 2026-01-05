@@ -1,18 +1,30 @@
 """Error summarization for feedback generation."""
 
+import asyncio
+import logging
+
+from veridical.config.schema import LocalLLMConfig
 from veridical.models.result import GateResult, VerificationResult
+from veridical.verifier.analysis import LogAnalyzer
+
+logger = logging.getLogger(__name__)
 
 
 class FeedbackGenerator:
     """Generates error summaries for feedback to the next iteration."""
 
-    def __init__(self, max_length: int = 2000) -> None:
+    def __init__(
+        self, max_length: int = 2000, local_llm_config: LocalLLMConfig | None = None
+    ) -> None:
         """Initialize the feedback generator.
 
         Args:
             max_length: Maximum length of generated feedback
+            local_llm_config: Optional configuration for local LLM-based analysis
         """
         self.max_length = max_length
+        self.local_llm_config = local_llm_config
+        self.log_analyzer = LogAnalyzer(local_llm_config) if local_llm_config else None
 
     def generate_feedback(self, result: VerificationResult) -> str:
         """Generate error feedback from verification result.
@@ -58,9 +70,22 @@ class FeedbackGenerator:
         # Prioritize error output
         content = gate.error_output or gate.output
 
-        # Compress output
-        compressed = self.compress_log_output(content)
-        lines.append(compressed)
+        # Use RLM-based analysis if available, otherwise fall back to heuristic
+        if self.log_analyzer:
+            try:
+                logger.info(f"Using RLM analysis for gate '{gate.name}'")
+                analyzed = asyncio.run(self.log_analyzer.analyze_log(content, gate.name))
+                lines.append(analyzed)
+            except Exception as e:
+                logger.warning(
+                    f"RLM analysis failed for gate '{gate.name}', falling back to heuristic: {e}"
+                )
+                compressed = self.compress_log_output(content)
+                lines.append(compressed)
+        else:
+            # Compress output using heuristic
+            compressed = self.compress_log_output(content)
+            lines.append(compressed)
 
         return "\n".join(lines)
 

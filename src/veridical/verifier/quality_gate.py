@@ -42,6 +42,7 @@ class Verifier:
         self.runner = CommandRunner(repo_path)
         self.feedback_generator = FeedbackGenerator(
             max_length=config.verifier.summary_max_length,
+            local_llm_config=config.verifier.local_llm,
         )
         self.current_tasks_file: Path | None = None
 

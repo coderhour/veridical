@@ -55,6 +55,14 @@ verifier:
       timeout: 120
       required: true
   summary_max_length: 2000
+  # Optional: Enable local LLM for advanced log analysis using RLM strategy
+  # Requires a local OpenAI-compatible endpoint (e.g., Ollama, vLLM)
+  # local_llm:
+  #   base_url: http://localhost:11434/v1  # Ollama default endpoint
+  #   model: qwen2.5:7b                     # Or llama3.2:8b, mistral:7b, etc.
+  #   api_key: ollama                       # Optional, use 'ollama' for Ollama
+  #   timeout: 30                           # Timeout per LLM request in seconds
+  #   chunk_size: 500                       # Lines per chunk for recursive summarization
 
 git:
   base_branch: main
