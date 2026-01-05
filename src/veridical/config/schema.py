@@ -164,6 +164,10 @@ class GitConfig(BaseModel):
         True,
         description="Automatically delete iteration branches after merge",
     )
+    auto_create_work_branch: bool = Field(
+        True,
+        description="Automatically create a work branch for changes instead of merging to base_branch",
+    )
 
 
 class VeridicalConfig(BaseSettings):

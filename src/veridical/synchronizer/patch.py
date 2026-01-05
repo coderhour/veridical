@@ -107,6 +107,59 @@ class Synchronizer:
             branch_prefix=config.git.branch_prefix,
         )
         self.patch_applier = PatchApplier(repo_path)
+        self._work_branch: str | None = None
+        self._target_branch_override: str | None = None
+
+    @property
+    def starting_branch(self) -> str:
+        """Get the starting branch captured at initialization."""
+        return self.branch_manager.starting_branch
+
+    @property
+    def work_branch(self) -> str | None:
+        """Get the work branch created for this run."""
+        return self._work_branch
+
+    def setup_work_branch(
+        self,
+        task_description: str,
+        target_branch: str | None = None,
+    ) -> None:
+        """Set up the work branch for this run.
+
+        Args:
+            task_description: Description of the task (for branch naming)
+            target_branch: Optional override for the target branch
+        """
+        self._target_branch_override = target_branch
+
+        if target_branch:
+            # Explicit override - use it as the work branch
+            logger.info(f"Using explicit target branch: {target_branch}")
+            self._work_branch = target_branch
+            # Ensure it exists and checkout
+            if not self.git.branch_exists(target_branch):
+                logger.info(
+                    f"Creating target branch {target_branch} from {self.config.git.base_branch}"
+                )
+                self.git.checkout(self.config.git.base_branch)
+                self.git.checkout(target_branch, create=True)
+            else:
+                self.git.checkout(target_branch)
+        elif self.config.git.auto_create_work_branch:
+            # Auto-create work branch from task description
+            logger.info("Auto-creating work branch")
+            self._work_branch = self.branch_manager.create_work_branch(
+                task_description, prefix="feat"
+            )
+        else:
+            # Legacy behavior - merge to base_branch
+            logger.info(f"Auto-create disabled, using base_branch: {self.config.git.base_branch}")
+            self._work_branch = self.config.git.base_branch
+            self.git.checkout(self._work_branch)
+
+        # Update branch manager's base branch so iterations are created from the target
+        self.branch_manager.base_branch = self._work_branch
 
     def create_iteration_branch(self, iteration: int) -> str:
         """Create and checkout an iteration branch.
@@ -170,9 +223,13 @@ class Synchronizer:
         self.branch_manager.cleanup_branch(branch_name)
 
     def merge_to_main(self, branch_name: str, task_description: str | None = None) -> str:
-        """Merge a successful iteration to main.
+        """Merge a successful iteration to the target branch.
 
         Commits any uncommitted changes first, then merges the branch.
+        The target branch is determined by:
+        1. Explicit --target-branch override
+        2. Auto-created work branch (if auto_create_work_branch is enabled)
+        3. base_branch (legacy behavior)
 
         Args:
             branch_name: Name of the branch to merge
@@ -181,7 +238,9 @@ class Synchronizer:
         Returns:
             Commit hash after merge
         """
-        logger.info(f"Synchronizer: preparing to merge {branch_name} to main")
+        # Determine the merge target
+        target = self._work_branch or self.config.git.base_branch
+        logger.info(f"Synchronizer: preparing to merge {branch_name} to {target}")
 
         # Commit changes on the iteration branch before merging
         # (patches are applied as uncommitted changes)
@@ -195,12 +254,27 @@ class Synchronizer:
         else:
             logger.debug("Working directory is clean, no commit needed")
 
-        commit = self.branch_manager.merge_to_main(branch_name)
+        # Checkout target branch and merge
+        logger.info(f"Checking out target branch: {target}")
+        self.git.checkout(target)
+        logger.info(f"Merging {branch_name} into {target}")
+        self.git._run(
+            "merge",
+            branch_name,
+            "--no-ff",
+            "-m",
+            f"Merge {branch_name}",
+        )
+        commit = self.git.get_current_commit()
 
         # Auto cleanup if configured
         if self.config.git.auto_cleanup and self.git.branch_exists(branch_name):
             logger.info(f"Auto-cleanup enabled, deleting branch {branch_name}")
             self.git.delete_branch(branch_name, force=True)
+
+        # Return to starting branch
+        logger.info(f"Returning to starting branch: {self.starting_branch}")
+        self.git.checkout(self.starting_branch)
 
         logger.info(f"Merge complete, final commit: {commit[:8]}")
         return commit

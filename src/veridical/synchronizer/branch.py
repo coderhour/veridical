@@ -8,6 +8,34 @@ from veridical.synchronizer.git import GitWrapper
 logger = logging.getLogger(__name__)
 
 
+def sanitize_branch_name(name: str) -> str:
+    """Sanitize a string to create a valid Git branch name.
+
+    Converts to lowercase, replaces spaces/underscores with hyphens,
+    and removes non-alphanumeric characters (except hyphens).
+
+    Args:
+        name: Input string to sanitize
+
+    Returns:
+        Sanitized branch name containing only [a-z0-9-]
+    """
+    # Convert to lowercase
+    sanitized = name.lower()
+
+    # Replace spaces and underscores with hyphens
+    sanitized = sanitized.replace(" ", "-").replace("_", "-")
+
+    # Keep only alphanumeric and hyphens
+    sanitized = "".join(c for c in sanitized if c.isalnum() or c == "-")
+
+    # Remove leading/trailing hyphens and collapse multiple hyphens
+    sanitized = "-".join(part for part in sanitized.split("-") if part)
+
+    # Fallback if empty
+    return sanitized if sanitized else "veridical-work"
+
+
 class BranchManager:
     """Manages iteration branches for Veridical.
 
@@ -33,6 +61,18 @@ class BranchManager:
         self.base_branch = base_branch
         self.branch_prefix = branch_prefix
 
+        # Capture the starting branch
+        current_branch = self.git.get_current_branch()
+        if current_branch:
+            self.starting_branch = current_branch
+            logger.info(f"Starting branch: {self.starting_branch}")
+        else:
+            # Detached HEAD state - fall back to base_branch
+            self.starting_branch = base_branch
+            logger.warning(
+                f"Detached HEAD detected, using base_branch '{base_branch}' as starting branch"
+            )
+
     def get_iteration_branch_name(self, iteration: int) -> str:
         """Get the branch name for an iteration.
 
@@ -43,6 +83,34 @@ class BranchManager:
             Branch name
         """
         return f"{self.branch_prefix}{iteration}"
+
+    def create_work_branch(self, task_description: str, prefix: str = "feat") -> str:
+        """Create or checkout a work branch for the task.
+
+        Args:
+            task_description: Description of the task (used for branch naming)
+            prefix: Branch prefix ('feat' or 'fix')
+
+        Returns:
+            Name of the work branch
+        """
+        # Sanitize the task description to create a branch name
+        sanitized_name = sanitize_branch_name(task_description)
+        branch_name = f"{prefix}/{sanitized_name}"
+
+        logger.info(f"Work branch: {branch_name}")
+
+        # Check if branch already exists
+        if self.git.branch_exists(branch_name):
+            logger.info(f"Work branch {branch_name} already exists, checking it out")
+            self.git.checkout(branch_name)
+        else:
+            # Create from base_branch
+            logger.info(f"Creating work branch {branch_name} from {self.base_branch}")
+            self.git.checkout(self.base_branch)
+            self.git.checkout(branch_name, create=True)
+
+        return branch_name
 
     def create_iteration_branch(self, iteration: int) -> str:
         """Create and checkout an iteration branch.

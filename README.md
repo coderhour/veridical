@@ -163,6 +163,10 @@ veri verify
 
 # Check status of active sessions
 veri status
+
+# Override the target branch for merging (default: auto-created from spec/task)
+veri run "Fix login bug" --target-branch bugfix/login-correction
+veri run "Fix login bug" -b bugfix/login-correction
 ```
 
 #### Session Resumption
@@ -188,6 +192,30 @@ veri run "Implement user authentication"
 # Resume the same session later
 veri run "Continue authentication implementation" -s abc123
 ```
+
+#### Workflow Isolation (Branch Strategy)
+
+Veridical is "safe by default." It avoids merging directly to your protected `main` branch.
+
+**How it works:**
+1. **Starting Branch Capture:** When you run `veri run`, it remembers which branch you're currently on.
+2. **Work Branch Creation:** It creates a dedicated work branch based on your `base_branch` (default: `main`):
+   - `feat/<sanitized-spec-name>` (e.g., `feat/add-user-auth`)
+   - `fix/<sanitized-task-name>` (e.g., `fix/fix-login-bug`)
+3. **Iteration Branches:** All AI progress happens in isolation branches (`veridical/iter-N`) branched from the work branch.
+4. **Final Merge:** Once verification passes, changes are merged into the **work branch**, NOT your original starting branch.
+5. **Auto-Return:** You are automatically checked out back to your starting branch when the loop finished.
+
+**Configuration:**
+You can disable this behavior to merge directly to your `base_branch` (legacy behavior):
+```yaml
+git:
+  auto_create_work_branch: false
+```
+
+**Manual Override:**
+Use `--target-branch` or `-b` to specify an exact branch to merge into.
+
 
 ## Configuration
 

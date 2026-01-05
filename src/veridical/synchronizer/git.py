@@ -61,14 +61,15 @@ class GitWrapper:
                 details=e.stderr or str(e),
             ) from e
 
-    def get_current_branch(self) -> str:
+    def get_current_branch(self) -> str | None:
         """Get the current branch name.
 
         Returns:
-            Name of the current branch
+            Name of the current branch, or None if in detached HEAD state
         """
         result = self._run("branch", "--show-current")
-        return result.stdout.strip()
+        branch = result.stdout.strip()
+        return branch if branch else None
 
     def get_current_commit(self) -> str:
         """Get the current commit hash.

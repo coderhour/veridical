@@ -118,6 +118,7 @@ def test_config(temp_git_repo):  # noqa: ARG001
             base_branch="main",
             branch_prefix="veridical/iter-",
             auto_cleanup=True,
+            auto_create_work_branch=False,
         ),
     )
 

@@ -85,6 +85,7 @@ class Supervisor:
         task_description: str,
         session_id: str | None = None,
         tasks_file: Path | None = None,
+        target_branch: str | None = None,
     ) -> LoopResult:
         """Run the supervisor loop for a task.
 
@@ -95,6 +96,7 @@ class Supervisor:
             task_description: Description of the task to perform
             session_id: Optional session ID to resume instead of creating new session
             tasks_file: Optional path to the tasks.md file for dynamic verification
+            target_branch: Optional override for the target branch
 
         Returns:
             Result of the loop execution
@@ -102,6 +104,9 @@ class Supervisor:
         # Update verifier with the tasks file if provided
         if tasks_file:
             self.verifier.current_tasks_file = tasks_file
+
+        # Set up work branch for this run
+        self.synchronizer.setup_work_branch(task_description, target_branch)
 
         started_at = datetime.now()
         error_context: str | None = None
@@ -144,6 +149,7 @@ class Supervisor:
             try:
                 poll_result = await self.poller.wait_for_completion(current_session_id)
             except TimeoutError:
+                self.synchronizer.git.checkout(self.synchronizer.starting_branch)
                 self._transition_to(SupervisorState.FAILED)
                 return LoopResult.failure_result(
                     iterations=iteration,
@@ -152,6 +158,7 @@ class Supervisor:
                 )
             except APIError as e:
                 # Handle API errors (e.g., invalid session ID returns 404)
+                self.synchronizer.git.checkout(self.synchronizer.starting_branch)
                 self._transition_to(SupervisorState.FAILED)
 
                 # Provide clear message for resumed sessions
@@ -196,6 +203,7 @@ class Supervisor:
                 # If this was a resumed session, abort instead of retrying
                 # The patch was created against a different codebase version
                 if session_id and iteration == 1:
+                    self.synchronizer.git.checkout(self.synchronizer.starting_branch)
                     self._transition_to(SupervisorState.FAILED)
                     return LoopResult.failure_result(
                         iterations=iteration,
@@ -227,12 +235,11 @@ class Supervisor:
                 commit_hash = self.synchronizer.merge_to_main(iter_branch, task_description)
                 self._circuit_breaker.record_success()
 
-                return LoopResult(
-                    success=True,
+                return LoopResult.success_result(
                     iterations=iteration,
                     started_at=started_at,
-                    completed_at=datetime.now(),
                     final_commit=commit_hash,
+                    target_branch=self.synchronizer.work_branch,
                 )
 
             # 6. FAILURE (Loop)
@@ -246,6 +253,7 @@ class Supervisor:
             self.synchronizer.cleanup_branch(iter_branch)
 
         # Loop terminated
+        self.synchronizer.git.checkout(self.synchronizer.starting_branch)
         self._transition_to(SupervisorState.FAILED)
         return LoopResult.failure_result(
             iterations=self._circuit_breaker.iteration_count,

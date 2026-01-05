@@ -60,6 +60,7 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+  auto_create_work_branch: true
 
 log_level: info
 """
@@ -102,6 +103,7 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+  auto_create_work_branch: true
 
 log_level: info
 """
@@ -148,6 +150,7 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+  auto_create_work_branch: true
 
 log_level: info
 """
@@ -196,6 +199,7 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+  auto_create_work_branch: true
 
 log_level: info
 """
@@ -242,6 +246,7 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+  auto_create_work_branch: true
 
 log_level: info
 """
@@ -284,6 +289,7 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+  auto_create_work_branch: true
 
 log_level: info
 """
@@ -330,6 +336,7 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+  auto_create_work_branch: true
 
 log_level: info
 """
@@ -368,6 +375,7 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+  auto_create_work_branch: true
 
 log_level: info
 """
@@ -410,6 +418,7 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+  auto_create_work_branch: true
 
 log_level: info
 """
@@ -452,6 +461,7 @@ git:
   base_branch: main
   branch_prefix: veridical/iter-
   auto_cleanup: true
+  auto_create_work_branch: true
 
 log_level: info
 """

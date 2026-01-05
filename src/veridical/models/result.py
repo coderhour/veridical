@@ -18,6 +18,7 @@ class LoopResult(BaseModel):
     started_at: datetime = Field(..., description="When the loop started")
     completed_at: datetime = Field(..., description="When the loop completed")
     final_commit: str | None = Field(None, description="Git commit hash of successful result")
+    target_branch: str | None = Field(None, description="The branch where changes were merged")
     failure_reason: str | None = Field(None, description="Reason for failure if not successful")
     error_context: str | None = Field(None, description="Last error context if failed")
 
@@ -32,6 +33,7 @@ class LoopResult(BaseModel):
         iterations: int,
         started_at: datetime,
         final_commit: str,
+        target_branch: str | None = None,
     ) -> "LoopResult":
         """Create a successful result."""
         return cls(
@@ -40,6 +42,7 @@ class LoopResult(BaseModel):
             started_at=started_at,
             completed_at=datetime.now(),
             final_commit=final_commit,
+            target_branch=target_branch,
         )
 
     @classmethod

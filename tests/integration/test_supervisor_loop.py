@@ -42,6 +42,8 @@ async def test_supervisor_one_shot_success(tmp_path) -> None:
         mock_sync.apply_session_patch = AsyncMock(return_value=patch_res)
         mock_sync.create_iteration_branch.return_value = "iter-1"
         mock_sync.merge_to_main.return_value = "new_commit_hash"
+        mock_sync.work_branch = "feat/fix-bug"
+        mock_sync.starting_branch = "main"
 
         mock_verifier = MockVerifier.return_value
         verify_res = VerificationResult(passed=True, gates=[], duration_seconds=1.0)
@@ -97,6 +99,8 @@ async def test_supervisor_iterative_repair(tmp_path) -> None:
         mock_sync.apply_session_patch = AsyncMock(side_effect=[patch_res1, patch_res2])
         mock_sync.create_iteration_branch.side_effect = ["iter-1", "iter-2"]
         mock_sync.merge_to_main.return_value = "final_hash"
+        mock_sync.work_branch = "feat/fix-bug"
+        mock_sync.starting_branch = "main"
 
         mock_verifier = MockVerifier.return_value
         # Fail first, pass second
@@ -169,6 +173,8 @@ async def test_supervisor_circuit_breaker(tmp_path) -> None:
             )
 
         mock_sync.apply_session_patch = AsyncMock(side_effect=make_patch_result)
+        mock_sync.work_branch = "feat/task"
+        mock_sync.starting_branch = "main"
 
         mock_verifier = MockVerifier.return_value
         fail_res = VerificationResult(passed=False, gates=[], duration_seconds=1.0)

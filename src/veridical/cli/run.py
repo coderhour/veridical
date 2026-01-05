@@ -30,6 +30,7 @@ def run_supervisor(
     config_path: Path | None,
     session_id: str | None,
     tasks_file: Path | None = None,
+    target_branch: str | None = None,
 ) -> None:
     """Async wrapper for running the supervisor."""
     try:
@@ -72,7 +73,9 @@ def run_supervisor(
                     logger.info(f"Starting supervisor loop for task: {task}")
 
                 # Run loop
-                result = await supervisor.run(task, session_id=session_id, tasks_file=tasks_file)
+                result = await supervisor.run(
+                    task, session_id=session_id, tasks_file=tasks_file, target_branch=target_branch
+                )
 
                 # Report results
                 style = "green" if result.success else "red"
@@ -86,6 +89,9 @@ def run_supervisor(
 """
                 if result.final_commit:
                     content += f"[bold]Final Commit:[/bold] {result.final_commit}\n"
+
+                if result.target_branch:
+                    content += f"[bold]Target Branch:[/bold] {result.target_branch}\n"
 
                 if result.failure_reason:
                     content += f"\n[bold]Failure Reason:[/bold] {result.failure_reason}"
@@ -166,6 +172,14 @@ def run(
             help="Skip OpenSpec task verification",
         ),
     ] = False,
+    target_branch: Annotated[
+        str | None,
+        typer.Option(
+            "--target-branch",
+            "-b",
+            help="Override the target branch for merging changes",
+        ),
+    ] = None,
 ) -> None:
     """Start an autonomous task loop with Jules.
 
@@ -234,4 +248,12 @@ def run(
     else:
         console.print(f"[bold]Starting autonomous task:[/bold] {task}")
 
-    run_supervisor(task, max_iterations, dry_run, config_path, session_id, tasks_file=tasks_file)
+    run_supervisor(
+        task,
+        max_iterations,
+        dry_run,
+        config_path,
+        session_id,
+        tasks_file=tasks_file,
+        target_branch=target_branch,
+    )

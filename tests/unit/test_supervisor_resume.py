@@ -45,9 +45,16 @@ class TestSupervisorSessionResume:
         return AsyncMock()
 
     @pytest.fixture
-    def supervisor(self, mock_config: VeridicalConfig) -> Supervisor:
+    def supervisor(self, mock_config: VeridicalConfig, tmp_path: Path) -> Supervisor:
         """Create a supervisor instance with mocked dependencies."""
-        return Supervisor(mock_config, AsyncMock(), Path("/tmp/test"))
+        with (
+            patch("veridical.synchronizer.patch.GitWrapper") as mock_git_patch,
+            patch("veridical.synchronizer.branch.GitWrapper") as mock_git_branch,
+        ):
+            # Mock get_current_branch to return "main" for all tests
+            mock_git_patch.return_value.get_current_branch.return_value = "main"
+            mock_git_branch.return_value.get_current_branch.return_value = "main"
+            return Supervisor(mock_config, AsyncMock(), tmp_path)
 
     @pytest.mark.asyncio
     async def test_run_with_session_id_skips_dispatching(self, supervisor: Supervisor) -> None:
