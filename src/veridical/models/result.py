@@ -126,6 +126,7 @@ class PatchStatus(str, Enum):
     APPLIED = "applied"
     FAILED = "failed"
     CONFLICT = "conflict"
+    REJECTED = "rejected"
 
 
 class PatchResult(BaseModel):

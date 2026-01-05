@@ -188,6 +188,23 @@ class VerifierConfig(BaseModel):
     )
 
 
+class ScopeValidationConfig(BaseModel):
+    """Configuration for patch scope validation."""
+
+    allowlist: list[str] | None = Field(
+        None,
+        description="List of glob patterns for files that are allowed to be modified.",
+    )
+    denylist: list[str] | None = Field(
+        default_factory=lambda: [".github/", ".gitlab-ci.yml", "AGENTS.md", "*.env"],
+        description="List of glob patterns for files that are not allowed to be modified.",
+    )
+    strict_mode: bool = Field(
+        True,
+        description="If true, patches violating the scope are rejected. If false, a warning is logged.",
+    )
+
+
 class GitConfig(BaseModel):
     """Configuration for git operations."""
 
@@ -206,6 +223,10 @@ class GitConfig(BaseModel):
     auto_create_work_branch: bool = Field(
         True,
         description="Automatically create a work branch for changes instead of merging to base_branch",
+    )
+    scope_validation: ScopeValidationConfig = Field(
+        default_factory=ScopeValidationConfig,
+        description="Configuration for validating the scope of incoming patches.",
     )
 
 
