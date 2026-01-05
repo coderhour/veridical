@@ -9,8 +9,12 @@ from veridical.config.schema import ScopeValidationConfig
 from veridical.models.result import PatchStatus
 from veridical.synchronizer.patch import PatchApplier
 
-PATCH_DATA = "diff --git a/file.txt b/file.txt\n--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-hello\n+world"
-PATCH_DATA_DENYLISTED = "diff --git a/AGENTS.md b/AGENTS.md\n--- a/AGENTS.md\n+++ b/AGENTS.md\n@@ -1 +1 @@\n-old\n+new"
+PATCH_DATA = (
+    "diff --git a/file.txt b/file.txt\n--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-hello\n+world"
+)
+PATCH_DATA_DENYLISTED = (
+    "diff --git a/AGENTS.md b/AGENTS.md\n--- a/AGENTS.md\n+++ b/AGENTS.md\n@@ -1 +1 @@\n-old\n+new"
+)
 
 
 @patch("subprocess.run")
