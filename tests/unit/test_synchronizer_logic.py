@@ -129,3 +129,43 @@ class TestBranchManager:
                 return
 
             pytest.fail("Did not raise Exception")
+
+    def test_cleanup_branch_discards_uncommitted_changes(self) -> None:
+        """Test that cleanup_branch discards uncommitted changes before switching.
+
+        This prevents patch changes from polluting the main branch when checkout
+        happens - git normally preserves uncommitted working directory changes
+        when switching branches.
+        """
+        with patch("veridical.synchronizer.branch.GitWrapper") as MockGit:
+            mock_git = MockGit.return_value
+            # Simulate dirty working directory (uncommitted patch changes)
+            mock_git.is_clean.return_value = False
+            mock_git.branch_exists.return_value = True
+
+            manager = BranchManager(Path("/tmp"))
+            manager.cleanup_branch("veridical/iter-1")
+
+            # Should reset hard to discard changes before checkout
+            mock_git.reset_hard.assert_called_once()
+            # Then checkout base branch
+            mock_git.checkout.assert_called_once_with("main")
+            # Then delete the iteration branch
+            mock_git.delete_branch.assert_called_once_with("veridical/iter-1", force=True)
+
+    def test_cleanup_branch_skips_reset_when_clean(self) -> None:
+        """Test that cleanup_branch skips reset when working dir is clean."""
+        with patch("veridical.synchronizer.branch.GitWrapper") as MockGit:
+            mock_git = MockGit.return_value
+            # Simulate clean working directory
+            mock_git.is_clean.return_value = True
+            mock_git.branch_exists.return_value = True
+
+            manager = BranchManager(Path("/tmp"))
+            manager.cleanup_branch("veridical/iter-1")
+
+            # Should NOT call reset_hard
+            mock_git.reset_hard.assert_not_called()
+            # Should still checkout and delete
+            mock_git.checkout.assert_called_once_with("main")
+            mock_git.delete_branch.assert_called_once_with("veridical/iter-1", force=True)

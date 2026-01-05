@@ -196,3 +196,7 @@ class GitWrapper:
         """
         result = self._run("remote", "get-url", remote)
         return result.stdout.strip()
+
+    def reset_hard(self) -> None:
+        """Reset the working directory to HEAD, discarding all changes."""
+        self._run("reset", "--hard", "HEAD")

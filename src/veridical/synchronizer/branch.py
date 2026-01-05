@@ -76,10 +76,19 @@ class BranchManager:
     def cleanup_branch(self, branch_name: str) -> None:
         """Delete an iteration branch.
 
+        Discards any uncommitted changes before switching back to the base
+        branch to prevent patch changes from polluting main.
+
         Args:
             branch_name: Name of the branch to delete
         """
         logger.info(f"Cleaning up branch: {branch_name}")
+
+        # Discard uncommitted changes before switching branches
+        # This prevents patch changes from traveling to main
+        if not self.git.is_clean():
+            logger.debug("Discarding uncommitted changes before cleanup")
+            self.git.reset_hard()
 
         # Checkout base first
         logger.debug(f"Checking out base branch: {self.base_branch}")
