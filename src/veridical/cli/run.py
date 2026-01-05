@@ -29,6 +29,7 @@ def run_supervisor(
     dry_run: bool,
     config_path: Path | None,
     session_id: str | None,
+    verbose: bool,
     tasks_file: Path | None = None,
     target_branch: str | None = None,
 ) -> None:
@@ -65,7 +66,7 @@ def run_supervisor(
                 timeout=config.jules.poll_timeout,
             ) as client:
                 # Initialize Supervisor
-                supervisor = Supervisor(config, client, Path.cwd())
+                supervisor = Supervisor(config, client, Path.cwd(), verbose=verbose)
 
                 if session_id:
                     logger.info(f"Resuming session {session_id} for task: {task}")
@@ -164,6 +165,14 @@ def run(
             help="Resume an existing Jules session instead of creating a new one",
         ),
     ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Enable verbose output, including activity stream",
+        ),
+    ] = False,
     no_spec: Annotated[
         bool,
         typer.Option(
@@ -254,6 +263,7 @@ def run(
         dry_run,
         config_path,
         session_id,
+        verbose,
         tasks_file=tasks_file,
         target_branch=target_branch,
     )
