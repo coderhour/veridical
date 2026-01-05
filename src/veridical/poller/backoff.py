@@ -2,6 +2,24 @@
 
 import random
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from veridical.config.schema import BackoffConfig
+
+
+def create_backoff_strategy(config: "BackoffConfig") -> "BackoffStrategy":
+    """Create a backoff strategy from a configuration object."""
+    if config.type == "constant":
+        return ConstantBackoff(interval=config.interval)
+    if config.type == "exponential":
+        return ExponentialBackoff(
+            base_interval=config.base_interval,
+            max_interval=config.max_interval,
+            jitter_factor=config.jitter_factor,
+        )
+    # This should be unreachable due to Pydantic validation
+    raise ValueError(f"Unknown backoff type: {config.type}")
 
 
 class BackoffStrategy(ABC):
