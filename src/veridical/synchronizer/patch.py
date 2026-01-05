@@ -8,25 +8,33 @@ from typing import TYPE_CHECKING
 from veridical.models.result import PatchResult, PatchStatus
 from veridical.synchronizer.branch import BranchManager
 from veridical.synchronizer.git import GitWrapper
+from veridical.synchronizer.validator import ScopeValidator
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from veridical.api.client import JulesClient
-    from veridical.config.schema import VeridicalConfig
+    from veridical.config.schema import ScopeValidationConfig, VeridicalConfig
 
 
 class PatchApplier:
     """Applies patches from Jules to the local repository."""
 
-    def __init__(self, repo_path: Path) -> None:
+    def __init__(
+        self,
+        repo_path: Path,
+        validation_config: "ScopeValidationConfig",
+    ) -> None:
         """Initialize the patch applier.
 
         Args:
             repo_path: Path to the repository root
+            validation_config: Scope validation configuration
         """
         self.repo_path = repo_path
         self.git = GitWrapper(repo_path)
+        self.validator = ScopeValidator(validation_config)
+        self.strict_mode = validation_config.strict_mode
 
     def apply_patch(self, patch_data: str) -> PatchResult:
         """Apply a patch to the repository.
@@ -45,6 +53,17 @@ class PatchApplier:
                 files_changed=[],
                 diff_hash="",
             )
+
+        # Validate patch scope before applying
+        validation_result = self.validator.validate_patch(patch_data)
+        if not validation_result.is_valid:
+            violations_str = "\n".join(f"- {v}" for v in validation_result.violations)
+            error_msg = f"Patch rejected due to scope violations:\n{violations_str}"
+            if self.strict_mode:
+                logger.error(error_msg)
+                return PatchResult.failed(error_msg, status=PatchStatus.REJECTED)
+            else:
+                logger.warning(f"Scope violations found (non-strict mode):\n{violations_str}")
 
         try:
             logger.info("Applying patch...")
@@ -68,6 +87,10 @@ class PatchApplier:
             files = self.git.get_diff_stat()
             diff_hash = self.git.compute_diff_hash()
 
+            logger.info(
+                "Patch applied successfully.",
+                extra={"files_changed": files, "diff_hash": diff_hash},
+            )
             return PatchResult.applied(files_changed=files, diff_hash=diff_hash)
 
         except subprocess.CalledProcessError as e:
@@ -106,7 +129,10 @@ class Synchronizer:
             base_branch=config.git.base_branch,
             branch_prefix=config.git.branch_prefix,
         )
-        self.patch_applier = PatchApplier(repo_path)
+        self.patch_applier = PatchApplier(
+            repo_path,
+            validation_config=config.git.scope_validation,
+        )
         self._work_branch: str | None = None
         self._target_branch_override: str | None = None
 
