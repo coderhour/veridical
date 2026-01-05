@@ -39,6 +39,33 @@ class QualityGate(BaseModel):
         return values
 
 
+from typing import Annotated, Any, Literal, Union
+
+
+class ConstantBackoffConfig(BaseModel):
+    """Configuration for constant backoff."""
+
+    type: Literal["constant"] = "constant"
+    interval: float = Field(30.0, ge=0, description="Interval in seconds between attempts")
+
+
+class ExponentialBackoffConfig(BaseModel):
+    """Configuration for exponential backoff."""
+
+    type: Literal["exponential"] = "exponential"
+    base_interval: float = Field(30.0, ge=0, description="Initial interval in seconds")
+    max_interval: float = Field(300.0, ge=0, description="Maximum interval cap in seconds")
+    jitter_factor: float = Field(
+        0.1, ge=0.0, le=1.0, description="Random jitter as fraction of interval"
+    )
+
+
+BackoffConfig = Annotated[
+    Union[ConstantBackoffConfig, ExponentialBackoffConfig],
+    Field(discriminator="type"),
+]
+
+
 class JulesConfig(BaseModel):
     """Configuration for Jules API interaction."""
 
@@ -46,11 +73,9 @@ class JulesConfig(BaseModel):
         "https://jules.googleapis.com/v1alpha",
         description="Base URL for Jules API",
     )
-    poll_interval: int = Field(
-        30,
-        ge=1,
-        le=600,
-        description="Polling interval in seconds",
+    backoff: BackoffConfig = Field(
+        default_factory=ExponentialBackoffConfig,
+        description="Backoff strategy for polling",
     )
     poll_timeout: int = Field(
         3600,

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from veridical.api.models import SessionState
 from veridical.exceptions import TimeoutError
-from veridical.poller.backoff import BackoffStrategy, ExponentialBackoff
+from veridical.poller.backoff import BackoffStrategy, create_backoff_strategy
 
 if TYPE_CHECKING:
     from veridical.api.client import JulesClient
@@ -59,9 +59,7 @@ class Poller:
         """
         self.config = config
         self.api_client = api_client
-        self.backoff = backoff_strategy or ExponentialBackoff(
-            base_interval=config.jules.poll_interval,
-        )
+        self.backoff = backoff_strategy or create_backoff_strategy(config.jules.backoff)
 
     async def wait_for_completion(
         self,
