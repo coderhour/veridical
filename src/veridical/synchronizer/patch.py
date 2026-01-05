@@ -148,16 +148,31 @@ class Synchronizer:
         """
         return self.patch_applier.apply_patch(patch_data)
 
+    def commit_changes(self, message: str) -> str:
+        """Commit current changes.
+
+        Args:
+            message: Commit message
+
+        Returns:
+            Commit hash
+        """
+        self.git.add_all()
+        return self.git.commit(message)
+
     def cleanup_branch(self, branch_name: str) -> None:
         """Clean up a failed iteration branch.
 
         Args:
             branch_name: Name of the branch to delete
         """
+        logger.info(f"Synchronizer: cleaning up branch {branch_name}")
         self.branch_manager.cleanup_branch(branch_name)
 
     def merge_to_main(self, branch_name: str) -> str:
         """Merge a successful iteration to main.
+
+        Commits any uncommitted changes first, then merges the branch.
 
         Args:
             branch_name: Name of the branch to merge
@@ -165,12 +180,24 @@ class Synchronizer:
         Returns:
             Commit hash after merge
         """
+        logger.info(f"Synchronizer: preparing to merge {branch_name} to main")
+
+        # Commit changes on the iteration branch before merging
+        # (patches are applied as uncommitted changes)
+        if not self.git.is_clean():
+            logger.info("Uncommitted changes found, committing before merge")
+            self.commit_changes(f"Veridical: verified changes from {branch_name}")
+        else:
+            logger.debug("Working directory is clean, no commit needed")
+
         commit = self.branch_manager.merge_to_main(branch_name)
 
         # Auto cleanup if configured
         if self.config.git.auto_cleanup and self.git.branch_exists(branch_name):
+            logger.info(f"Auto-cleanup enabled, deleting branch {branch_name}")
             self.git.delete_branch(branch_name, force=True)
 
+        logger.info(f"Merge complete, final commit: {commit[:8]}")
         return commit
 
     def get_changed_files(self) -> list[str]:
