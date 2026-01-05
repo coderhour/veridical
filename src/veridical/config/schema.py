@@ -1,6 +1,6 @@
 """Configuration schema definitions using Pydantic."""
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, root_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -39,9 +39,6 @@ class QualityGate(BaseModel):
         return values
 
 
-from typing import Annotated, Any, Literal, Union
-
-
 class ConstantBackoffConfig(BaseModel):
     """Configuration for constant backoff."""
 
@@ -61,8 +58,7 @@ class ExponentialBackoffConfig(BaseModel):
 
 
 BackoffConfig = Annotated[
-    Union[ConstantBackoffConfig, ExponentialBackoffConfig],
-    Field(discriminator="type"),
+    ConstantBackoffConfig | ExponentialBackoffConfig, Field(discriminator="type")
 ]
 
 
