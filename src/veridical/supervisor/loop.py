@@ -136,9 +136,7 @@ class Supervisor:
 
                 iteration = self._circuit_breaker.iteration_count
                 logger.info(f"--- Starting Iteration {iteration} ---")
-                self.progress.set_iterations(
-                    iteration, self.config.supervisor.max_iterations
-                )
+                self.progress.set_iterations(iteration, self.config.supervisor.max_iterations)
 
                 # 1. DISPATCHING or SENDING FEEDBACK
                 if current_session_id and iteration == 1 and session_id:
@@ -151,9 +149,7 @@ class Supervisor:
                     self.progress.set_state("Sending feedback...")
                     logger.info(f"Sending feedback to existing session: {current_session_id}")
 
-                    feedback_prompt = self.dispatcher.build_prompt(
-                        task_description, error_context
-                    )
+                    feedback_prompt = self.dispatcher.build_prompt(task_description, error_context)
                     await self.client.send_message(current_session_id, feedback_prompt)
                 else:
                     # First iteration - create new session
@@ -258,9 +254,7 @@ class Supervisor:
                     # 5. SUCCESS
                     self._transition_to(SupervisorState.SUCCESS)
                     self.progress.set_state("Merging changes...")
-                    commit_hash = self.synchronizer.merge_to_main(
-                        iter_branch, task_description
-                    )
+                    commit_hash = self.synchronizer.merge_to_main(iter_branch, task_description)
                     self._circuit_breaker.record_success()
 
                     return LoopResult.success_result(

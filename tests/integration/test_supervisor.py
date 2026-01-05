@@ -14,9 +14,7 @@ def git_repo(tmp_path: Path) -> Path:
     """Create a git repo in a temporary directory."""
     subprocess.run(["git", "init"], cwd=tmp_path, check=True)
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True)
-    subprocess.run(
-        ["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True
-    )
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
     (tmp_path / "README.md").write_text("initial commit")
     subprocess.run(["git", "add", "README.md"], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-m", "initial commit"], cwd=tmp_path, check=True)
@@ -48,10 +46,10 @@ async def test_supervisor_initializes_progress_reporter(git_repo: Path) -> None:
 @patch("time.sleep", return_value=None)
 @patch("veridical.synchronizer.branch.BranchManager.__init__", return_value=None)
 async def test_supervisor_run_updates_progress(
-    mock_branch_manager_init: MagicMock,
-    mock_sleep: MagicMock,
-    mock_stderr: MagicMock,
-    mock_stdout: MagicMock,
+    _mock_branch_manager_init: MagicMock,
+    _mock_sleep: MagicMock,
+    _mock_stderr: MagicMock,
+    _mock_stdout: MagicMock,
     mock_verifier_run: AsyncMock,
     mock_apply_patch: AsyncMock,
     mock_create_session: AsyncMock,
@@ -95,15 +93,13 @@ async def test_supervisor_run_updates_progress(
     gate_result.exit_code = 1
     gate_result.output = "test output"
     gate_result.error_output = "test error output"
-    mock_verifier_run.return_value = MagicMock(
-        passed=False, failed_gates=[gate_result]
-    )
+    mock_verifier_run.return_value = MagicMock(passed=False, failed_gates=[gate_result])
     # Supervisor and mock progress reporter
     supervisor = Supervisor(config, client, git_repo, verbose=True)
-    supervisor.synchronizer.branch_manager.base_branch = "master"
+    supervisor.synchronizer.branch_manager.base_branch = "main"
     supervisor.synchronizer.branch_manager.git = supervisor.synchronizer.git
     supervisor.synchronizer.branch_manager.branch_prefix = "test-iteration-"
-    supervisor.synchronizer.branch_manager.starting_branch = "master"
+    supervisor.synchronizer.branch_manager.starting_branch = "main"
     mock_progress = MagicMock()
     supervisor.progress = mock_progress
     supervisor.poller.progress = mock_progress
