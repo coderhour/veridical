@@ -51,6 +51,7 @@ class Verifier:
             return await self.runner.run_gate(gate)
         if gate.type == "task_completion":
             # The schema validates that `path` is present.
+            assert gate.path is not None
             tasks_file_path = self.repo_path / gate.path
             return await asyncio.to_thread(verify_task_completion, gate.name, tasks_file_path)
 

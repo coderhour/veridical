@@ -33,6 +33,8 @@ class CommandRunner:
         logger.debug(f"Executing command: {gate.command} (timeout: {gate.timeout}s)")
 
         try:
+            # Type assertion to satisfy mypy, as the validator ensures this
+            assert gate.command is not None
             # Create subprocess
             process = await asyncio.create_subprocess_shell(
                 gate.command,
