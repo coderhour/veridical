@@ -89,6 +89,8 @@ class BranchManager:
         if not self.git.is_clean():
             logger.debug("Discarding uncommitted changes before cleanup")
             self.git.reset_hard()
+            # Also remove untracked files (newly created files)
+            self.git.clean()
 
         # Checkout base first
         logger.debug(f"Checking out base branch: {self.base_branch}")

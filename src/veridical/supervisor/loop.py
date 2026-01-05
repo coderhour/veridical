@@ -178,8 +178,6 @@ class Supervisor:
                 current_session_id,
             )
 
-            self._circuit_breaker.record_diff_hash(patch_result.diff_hash)
-
             if not patch_result.success:
                 self._circuit_breaker.record_failure()
                 # Clean up branch
@@ -204,6 +202,10 @@ class Supervisor:
 
                 error_context = f"Patch application failed: {patch_result.error}"
                 continue
+
+            # diff_hash is always set when patch is successfully applied
+            assert patch_result.diff_hash is not None
+            self._circuit_breaker.record_diff_hash(patch_result.diff_hash)
 
             # 4. VERIFYING
             self._transition_to(SupervisorState.VERIFYING)

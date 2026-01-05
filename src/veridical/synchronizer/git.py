@@ -200,3 +200,17 @@ class GitWrapper:
     def reset_hard(self) -> None:
         """Reset the working directory to HEAD, discarding all changes."""
         self._run("reset", "--hard", "HEAD")
+
+    def clean(self, *, directories: bool = True, force: bool = True) -> None:
+        """Remove untracked files from the working directory.
+
+        Args:
+            directories: Whether to also remove untracked directories
+            force: Whether to force the clean operation
+        """
+        args = ["clean"]
+        if force:
+            args.append("-f")
+        if directories:
+            args.append("-d")
+        self._run(*args)

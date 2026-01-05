@@ -34,6 +34,8 @@ class CommandRunner:
 
         try:
             # Create subprocess
+            # gate.command is validated non-None for 'command' type gates in schema
+            assert gate.command is not None
             process = await asyncio.create_subprocess_shell(
                 gate.command,
                 cwd=self.repo_path,
