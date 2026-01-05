@@ -34,27 +34,42 @@ supervisor:
 
 # Verifier Configuration
 verifier:
-  # Quality gates to run for verification
+  # Timeout in seconds for batches of parallel gates
+  parallel_timeout: 600
+
+  # Quality gates to run for verification. Gates with `parallel: true`
+  # will be grouped into batches and run concurrently.
   quality_gates:
+    # Example of a sequential gate (default)
+    - name: task_completion
+      type: task_completion
+      path: "auto" # Veridical will find the relevant spec's tasks.md
+      required: true
+
+    # Example of parallel gates
     - name: pytest
       command: pytest
       timeout: 300
       required: true
+      parallel: true
 
     - name: ruff
       command: ruff check src/
       timeout: 60
       required: true
+      parallel: true
 
     - name: ruff-format
       command: ruff format --check src/
       timeout: 60
       required: true
+      parallel: true
 
     - name: mypy
       command: mypy src/
       timeout: 120
       required: true
+      parallel: true
 
   # Maximum length of error summaries sent back to Jules
   summary_max_length: 2000

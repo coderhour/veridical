@@ -17,6 +17,7 @@ class QualityGate(BaseModel):
     path: str | None = Field(None, description="File path for 'task_completion' type gates")
     timeout: int = Field(300, ge=1, description="Timeout in seconds")
     required: bool = Field(True, description="Whether this gate must pass")
+    parallel: bool = Field(False, description="Whether this gate can run in parallel with others")
 
     @root_validator(skip_on_failure=True)
     def check_gate_config(cls, values: dict[str, Any]) -> dict[str, Any]:
@@ -170,6 +171,11 @@ class VerifierConfig(BaseModel):
             QualityGate(name="mypy", command="mypy src/"),
         ],
         description="List of quality gates to run",
+    )
+    parallel_timeout: int = Field(
+        600,
+        ge=1,
+        description="Timeout in seconds for parallel gate execution",
     )
     summary_max_length: int = Field(
         2000,

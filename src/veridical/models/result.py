@@ -71,6 +71,8 @@ class GateStatus(str, Enum):
     FAILED = "failed"
     SKIPPED = "skipped"
     ERROR = "error"
+    TIMEOUT = "timeout"
+    CANCELLED = "cancelled"
 
 
 class GateResult(BaseModel):
