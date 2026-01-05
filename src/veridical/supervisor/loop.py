@@ -237,7 +237,7 @@ class Supervisor:
 
             # 6. FAILURE (Loop)
             self._circuit_breaker.record_failure()
-            error_context = self.verifier.generate_feedback(verification_result)
+            error_context = await self.verifier.generate_feedback(verification_result)
 
             # Cleanup failed branch to keep repo clean?
             # Or keep it for inspection?

@@ -201,7 +201,12 @@ class TestSupervisorSessionResume:
                 "run_all",
                 side_effect=[verification_result_fail, verification_result_pass],
             ),
-            patch.object(supervisor.verifier, "generate_feedback", return_value="Test failed"),
+            patch.object(
+                supervisor.verifier,
+                "generate_feedback",
+                new_callable=AsyncMock,
+                return_value="Test failed",
+            ),
             patch.object(supervisor.synchronizer, "cleanup_branch"),
             patch.object(supervisor.synchronizer, "merge_to_main", return_value="commit123"),
         ):

@@ -290,7 +290,7 @@ class TestE2ESupervisorFlow:
         supervisor.verifier.run_all = mock_run_all
 
         # Mock generate_feedback to return a simple error message
-        supervisor.verifier.generate_feedback = MagicMock(
+        supervisor.verifier.generate_feedback = AsyncMock(
             return_value="VERIFICATION FAILED:\n- test-gate: Test failed: expected foo, got bar"
         )
 
@@ -459,7 +459,7 @@ class TestE2ESupervisorFlow:
                 ],
             )
         )
-        supervisor.verifier.generate_feedback = MagicMock(return_value="Always failing")
+        supervisor.verifier.generate_feedback = AsyncMock(return_value="Always failing")
 
         # Run the supervisor loop
         result = await supervisor.run("Task that always fails verification")
@@ -604,7 +604,7 @@ class TestE2ESupervisorFlow:
             return MagicMock(passed=True, gate_results=[])
 
         supervisor.verifier.run_all = mock_verify
-        supervisor.verifier.generate_feedback = MagicMock(return_value="Failed")
+        supervisor.verifier.generate_feedback = AsyncMock(return_value="Failed")
 
         # Run the supervisor
         result = await supervisor.run("Test branch states")

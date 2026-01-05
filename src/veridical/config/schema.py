@@ -125,6 +125,14 @@ class SupervisorConfig(BaseModel):
     )
 
 
+class LocalLLMConfig(BaseModel):
+    """Configuration for a local LLM endpoint."""
+
+    base_url: str = Field(..., description="Base URL of the OpenAI-compatible endpoint")
+    model: str = Field(..., description="Model name to use for analysis")
+    timeout: int = Field(120, ge=1, description="Request timeout in seconds")
+
+
 class VerifierConfig(BaseModel):
     """Configuration for the verifier component."""
 
@@ -146,6 +154,9 @@ class VerifierConfig(BaseModel):
         2000,
         ge=100,
         description="Maximum length of error summary for feedback",
+    )
+    local_llm: LocalLLMConfig | None = Field(
+        None, description="Configuration for local LLM-based log analysis"
     )
 
 
