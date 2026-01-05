@@ -2,7 +2,7 @@
 
 ## MODIFIED Requirements
 
-### Requirement: Run Command with Optional Task
+### Requirement: Fix Subcommand
 
 The `run` command SHALL support optional task description with automatic spec detection.
 

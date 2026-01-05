@@ -111,20 +111,23 @@ The `Verifier` SHALL produce concise feedback from verbose logs.
 
 ### Requirement: Task Completion Verification
 
-The system SHALL verify that all non-manual tasks in the active `tasks.md` are marked as complete.
+The task_completion quality gate SHALL support dynamic path detection.
 
-#### Scenario: All tasks completed
-- **WHEN** all `- [x]` boxes are checked in `tasks.md`
-- **THEN** the task-completion gate SHALL pass
+#### Scenario: Auto Path Configuration
 
-#### Scenario: Missing tasks
-- **WHEN** there is at least one unchecked `- [ ]` box in `tasks.md`
-- **AND** the task description does NOT contain "manual test" or "integration test"
-- **THEN** the task-completion gate SHALL fail
-- **AND** the feedback SHALL include the descriptions of the incomplete tasks
+WHEN a task_completion gate is configured with `path: auto`
+THEN the verifier SHALL use the dynamically detected tasks.md path from the current spec context
+AND if no spec is selected, it SHALL skip the task_completion gate
 
-#### Scenario: Excluded tasks
-- **WHEN** an unchecked `- [ ]` box contains "manual test" or "integration test"
-- **THEN** it SHALL be ignored by the task-completion gate
-- **AND** the gate SHALL pass if all other boxes are checked
+#### Scenario: Explicit Path Configuration
+
+WHEN a task_completion gate is configured with an explicit path (e.g., `path: openspec/changes/foo/tasks.md`)
+THEN the verifier SHALL use the explicitly configured path
+AND the behavior SHALL remain unchanged from current implementation
+
+#### Scenario: Default Configuration
+
+WHEN the default VerifierConfig is used
+THEN the task_completion gate SHALL default to `path: auto`
+AND it SHALL integrate with the dynamic spec detection system
 

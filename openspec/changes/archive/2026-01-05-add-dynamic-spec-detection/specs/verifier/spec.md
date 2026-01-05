@@ -2,7 +2,7 @@
 
 ## MODIFIED Requirements
 
-### Requirement: Task Completion Gate with Auto Path
+### Requirement: Task Completion Verification
 
 The task_completion quality gate SHALL support dynamic path detection.
 
