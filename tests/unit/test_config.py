@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from veridical.config.defaults import (
     DOTNET_CONFIG_TEMPLATE,
@@ -70,6 +71,20 @@ class TestJulesConfig:
         assert config.api_base_url == "https://jules.googleapis.com/v1alpha"
         assert config.poll_interval == 30
         assert config.auto_approve_plans is True
+        assert config.backoff_strategy == "constant"
+
+    def test_backoff_strategy_valid(self) -> None:
+        """Test valid backoff_strategy values."""
+        config_const = JulesConfig(backoff_strategy="constant")
+        assert config_const.backoff_strategy == "constant"
+
+        config_exp = JulesConfig(backoff_strategy="exponential")
+        assert config_exp.backoff_strategy == "exponential"
+
+    def test_backoff_strategy_invalid(self) -> None:
+        """Test invalid backoff_strategy value."""
+        with pytest.raises(ValidationError):
+            JulesConfig(backoff_strategy="invalid_strategy")
 
 
 @pytest.mark.unit

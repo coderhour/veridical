@@ -26,6 +26,7 @@ jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
   poll_timeout: 3600
+  backoff_strategy: constant  # "constant" or "exponential"
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -69,6 +70,7 @@ jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
   poll_timeout: 3600
+  backoff_strategy: constant  # "constant" or "exponential"
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -108,6 +110,7 @@ jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
   poll_timeout: 3600
+  backoff_strategy: constant  # "constant" or "exponential"
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -151,6 +154,7 @@ jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
   poll_timeout: 3600
+  backoff_strategy: constant  # "constant" or "exponential"
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -196,6 +200,7 @@ jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
   poll_timeout: 3600
+  backoff_strategy: constant  # "constant" or "exponential"
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -239,6 +244,7 @@ jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
   poll_timeout: 3600
+  backoff_strategy: constant  # "constant" or "exponential"
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -278,6 +284,7 @@ jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
   poll_timeout: 3600
+  backoff_strategy: constant  # "constant" or "exponential"
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -321,6 +328,7 @@ jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
   poll_timeout: 3600
+  backoff_strategy: constant  # "constant" or "exponential"
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -356,6 +364,7 @@ jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
   poll_timeout: 3600
+  backoff_strategy: constant  # "constant" or "exponential"
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -395,6 +404,7 @@ jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
   poll_timeout: 3600
+  backoff_strategy: constant  # "constant" or "exponential"
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
