@@ -51,6 +51,7 @@ class Dispatcher:
         self.repo_path = repo_path
         self.git = GitWrapper(repo_path)
         self.prompt_builder = prompt_builder or PromptBuilder()
+        self.current_tasks_file: Path | None = None
 
     def build_prompt(
         self,
@@ -70,6 +71,7 @@ class Dispatcher:
         return self.prompt_builder.build_prompt(
             task=task,
             error_context=error_context,
+            tasks_file=self.current_tasks_file,
         )
 
     async def create_session(

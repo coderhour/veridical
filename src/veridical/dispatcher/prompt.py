@@ -1,5 +1,7 @@
 """Prompt construction using the sandwich strategy."""
 
+from pathlib import Path
+
 from jinja2 import Template
 
 # Default role layer template
@@ -25,6 +27,26 @@ IMPORTANT: The previous attempt failed with the following errors:
 
 You MUST address these specific issues in your solution.
 {% endif %}
+"""
+
+# OpenSpec task tracking instructions
+OPENSPEC_TASK_TEMPLATE = """\
+## OpenSpec Task Tracking
+
+You are implementing an OpenSpec change. The tasks for this change are tracked in:
+`{{ tasks_file }}`
+
+**CRITICAL**: As you complete each task, you MUST update the tasks.md file by changing:
+- `- [ ]` to `- [x]` for completed tasks
+
+This is how the verification system tracks your progress. If you don't mark tasks complete,
+the verification will fail even if you've done the work.
+
+Workflow:
+1. Read the tasks.md file to understand what needs to be done
+2. Implement each task
+3. After completing a task, immediately update tasks.md to mark it `- [x]`
+4. Continue until all tasks are marked complete
 """
 
 
@@ -57,6 +79,7 @@ class PromptBuilder:
         error_context: str | None = None,
         *,
         extra_constraints: list[str] | None = None,
+        tasks_file: Path | None = None,
     ) -> str:
         """Build a complete sandwich prompt.
 
@@ -64,6 +87,7 @@ class PromptBuilder:
             task: User's task description (intent layer)
             error_context: Error context from previous iteration
             extra_constraints: Additional constraints to include
+            tasks_file: Path to OpenSpec tasks.md file for task tracking
 
         Returns:
             Complete prompt string
@@ -82,5 +106,11 @@ class PromptBuilder:
             for i, c in enumerate(extra_constraints, 1):
                 constraint += f"{i}. {c}\n"
 
+        # Add OpenSpec task tracking instructions if tasks file is provided
+        openspec_section = ""
+        if tasks_file:
+            openspec_template = Template(OPENSPEC_TASK_TEMPLATE)
+            openspec_section = "\n\n" + openspec_template.render(tasks_file=str(tasks_file))
+
         # Assemble sandwich
-        return f"{role}\n\n## Task\n\n{task}\n\n## Constraints\n\n{constraint}"
+        return f"{role}\n\n## Task\n\n{task}{openspec_section}\n\n## Constraints\n\n{constraint}"

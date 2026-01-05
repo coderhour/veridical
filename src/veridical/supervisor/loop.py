@@ -101,9 +101,10 @@ class Supervisor:
         Returns:
             Result of the loop execution
         """
-        # Update verifier with the tasks file if provided
+        # Update verifier and dispatcher with the tasks file if provided
         if tasks_file:
             self.verifier.current_tasks_file = tasks_file
+            self.dispatcher.current_tasks_file = tasks_file
 
         # Set up work branch for this run
         self.synchronizer.setup_work_branch(task_description, target_branch)

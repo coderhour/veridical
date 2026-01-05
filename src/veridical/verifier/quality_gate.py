@@ -13,6 +13,8 @@ from veridical.verifier.task_completion import verify_task_completion
 
 if TYPE_CHECKING:
     from veridical.config.schema import QualityGate, VeridicalConfig
+else:
+    from veridical.config.schema import QualityGate
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +181,30 @@ class Verifier:
         # This should be unreachable due to schema validation
         raise ValueError(f"Unknown quality gate type: {gate.type}")
 
+    def _get_gates_with_task_completion(self) -> list["QualityGate"]:
+        """Get quality gates, auto-injecting task_completion if needed.
+
+        If current_tasks_file is set and no task_completion gate exists,
+        automatically prepend one to ensure OpenSpec tasks are verified.
+        """
+        gates = list(self.config.verifier.quality_gates)
+
+        # Check if task_completion gate already exists
+        has_task_completion = any(g.type == "task_completion" for g in gates)
+
+        # Auto-inject if we have a tasks file but no task_completion gate
+        if self.current_tasks_file and not has_task_completion:
+            logger.info("Auto-injecting task_completion gate for OpenSpec verification")
+            task_gate = QualityGate(
+                name="task_completion",
+                type="task_completion",
+                path="auto",
+                required=True,
+            )
+            gates.insert(0, task_gate)
+
+        return gates
+
     async def run_all(self) -> VerificationResult:
         """Run all configured quality gates.
 
@@ -186,7 +212,7 @@ class Verifier:
             Aggregated verification result
         """
         start_time = time.monotonic()
-        gates = self.config.verifier.quality_gates
+        gates = self._get_gates_with_task_completion()
         gate_batches = self._group_gates(gates)
         results: list[GateResult] = []
         should_stop = False
