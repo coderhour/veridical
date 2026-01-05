@@ -1,5 +1,5 @@
 """Unit tests for the Poller component."""
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, call
 
 import pytest
 from pytest_mock import MockerFixture
