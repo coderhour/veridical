@@ -80,7 +80,12 @@ class Supervisor:
         logger.info(f"Transitioning: {self._state} -> {new_state}")
         self._state = new_state
 
-    async def run(self, task_description: str, session_id: str | None = None) -> LoopResult:
+    async def run(
+        self,
+        task_description: str,
+        session_id: str | None = None,
+        tasks_file: Path | None = None,
+    ) -> LoopResult:
         """Run the supervisor loop for a task.
 
         This is the main entry point for executing an autonomous
@@ -89,10 +94,15 @@ class Supervisor:
         Args:
             task_description: Description of the task to perform
             session_id: Optional session ID to resume instead of creating new session
+            tasks_file: Optional path to the tasks.md file for dynamic verification
 
         Returns:
             Result of the loop execution
         """
+        # Update verifier with the tasks file if provided
+        if tasks_file:
+            self.verifier.current_tasks_file = tasks_file
+
         started_at = datetime.now()
         error_context: str | None = None
 

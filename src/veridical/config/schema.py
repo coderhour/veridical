@@ -125,7 +125,7 @@ class VerifierConfig(BaseModel):
                 name="task_completion",
                 type="task_completion",
                 required=True,
-                path="openspec/changes/add-task-completion-verifier/tasks.md",
+                path="auto",
             ),
             QualityGate(name="pytest", command="pytest"),
             QualityGate(name="ruff", command="ruff check src/"),

@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from veridical.models.result import GateResult, VerificationResult
+from veridical.models.result import GateResult, GateStatus, VerificationResult
 from veridical.verifier.feedback import FeedbackGenerator
 from veridical.verifier.runner import CommandRunner
 from veridical.verifier.task_completion import verify_task_completion
@@ -43,6 +43,7 @@ class Verifier:
         self.feedback_generator = FeedbackGenerator(
             max_length=config.verifier.summary_max_length,
         )
+        self.current_tasks_file: Path | None = None
 
     async def _run_gate_logic(self, gate: "QualityGate") -> GateResult:
         """Run the logic for a single gate based on its type."""
@@ -52,7 +53,23 @@ class Verifier:
         if gate.type == "task_completion":
             # The schema validates that `path` is present for task_completion gates
             assert gate.path is not None
-            tasks_file_path = self.repo_path / gate.path
+
+            tasks_file_path: Path | None = None
+            if gate.path == "auto":
+                if self.current_tasks_file:
+                    tasks_file_path = self.current_tasks_file
+                else:
+                    logger.warning("No dynamic spec detected; skipping task_completion gate")
+                    return GateResult(
+                        name=gate.name,
+                        status=GateStatus.PASSED,
+                        output="No OpenSpec change detected to verify tasks.",
+                        duration_seconds=0.0,
+                    )
+            else:
+                tasks_file_path = self.repo_path / gate.path
+
+            assert tasks_file_path is not None
             return await asyncio.to_thread(verify_task_completion, gate.name, tasks_file_path)
 
         # This should be unreachable due to schema validation

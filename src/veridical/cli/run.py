@@ -12,8 +12,10 @@ from rich.panel import Panel
 
 from veridical.api.client import JulesClient
 from veridical.cli.git_utils import check_spec_status, format_spec_warning
+from veridical.cli.spec_selector import select_spec
 from veridical.config.loader import load_config
 from veridical.exceptions import VeridicalError
+from veridical.openspec import find_open_specs, match_spec_from_description
 from veridical.supervisor.loop import Supervisor
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,7 @@ def run_supervisor(
     dry_run: bool,
     config_path: Path | None,
     session_id: str | None,
+    tasks_file: Path | None = None,
 ) -> None:
     """Async wrapper for running the supervisor."""
     try:
@@ -63,7 +66,7 @@ def run_supervisor(
                     logger.info(f"Starting supervisor loop for task: {task}")
 
                 # Run loop
-                result = await supervisor.run(task, session_id=session_id)
+                result = await supervisor.run(task, session_id=session_id, tasks_file=tasks_file)
 
                 # Report results
                 style = "green" if result.success else "red"
@@ -95,6 +98,8 @@ def run_supervisor(
             console.print(
                 "[yellow]Dry run: Options parsed successfully. Supervisor not started.[/yellow]"
             )
+            if tasks_file:
+                console.print(f"[dim]Detected tasks file: {tasks_file}[/dim]")
             return
 
         asyncio.run(_run())
@@ -111,11 +116,11 @@ def run_supervisor(
 
 def run(
     task: Annotated[
-        str,
+        str | None,
         typer.Argument(
             help="Description of the task to perform",
         ),
-    ],
+    ] = None,
     max_iterations: Annotated[
         int | None,
         typer.Option(
@@ -147,6 +152,14 @@ def run(
             help="Resume an existing Jules session instead of creating a new one",
         ),
     ] = None,
+    no_spec: Annotated[
+        bool,
+        typer.Option(
+            "--no-spec",
+            "--skip-tasks",
+            help="Skip OpenSpec task verification",
+        ),
+    ] = False,
 ) -> None:
     """Start an autonomous task loop with Jules.
 
@@ -180,13 +193,39 @@ def run(
             console.print("[yellow]Aborted. Push your changes first with: git push[/yellow]")
             raise typer.Exit(code=0)
 
+    if max_iterations:
+        console.print(f"[dim]Max iterations: {max_iterations}[/dim]")
+
+    # Dynamic spec detection
+    tasks_file: Path | None = None
+    if not no_spec:
+        open_specs = find_open_specs()
+        matched_spec = None
+
+        if task:
+            matched_spec = match_spec_from_description(task, open_specs)
+
+        if not matched_spec and open_specs:
+            # Task not provided or didn't match, but specs exist
+            matched_spec = select_spec(open_specs)
+
+        if matched_spec:
+            tasks_file = matched_spec.tasks_file
+            if not task:
+                task = f"Implement spec {matched_spec.name}"
+                console.print(f"[bold blue]Auto-generated task:[/bold blue] {task}")
+            console.print(f"[bold blue]Tracking tasks in:[/bold blue] {tasks_file}")
+
+    if not task:
+        console.print(
+            "[bold red]Error:[/bold red] No task description provided and no spec selected."
+        )
+        raise typer.Exit(code=1)
+
     if session_id:
         console.print(f"[bold]Resuming session:[/bold] {session_id}")
         console.print(f"[bold]Task:[/bold] {task}")
     else:
         console.print(f"[bold]Starting autonomous task:[/bold] {task}")
 
-    if max_iterations:
-        console.print(f"[dim]Max iterations: {max_iterations}[/dim]")
-
-    run_supervisor(task, max_iterations, dry_run, config_path, session_id)
+    run_supervisor(task, max_iterations, dry_run, config_path, session_id, tasks_file=tasks_file)

@@ -143,13 +143,19 @@ veridical config init
 # Initialize configuration for a Node.js project
 veridical config init --template nodejs
 
-# Run an autonomous task loop
-veri run "Fix the login validation bug"
+# Start the autonomous supervisor (interactive spec selection if no task provided)
+veri run
 
-# Resume an existing Jules session (useful if interrupted or timed out)
-veri run "Continue the task" --session-id abc123def456
+# Start with an explicit task (auto-matches OpenSpec if name included)
+veri run "Implement spec add-dynamic-spec-detection"
+
+# Skip OpenSpec task verification for bug fixes or ad-hoc work
+veri run "Fix login validation bug" --no-spec
 # Or use the shortcut:
-veri run "Continue the task" -s abc123def456
+veri run "Fix login validation bug" --skip-tasks
+
+# Resume an existing Jules session
+veri run "Continue the task" --session-id abc123def456
 
 # Run quality verification locally
 # (Runs pytest, ruff, etc. defined in .veridical.yaml)
@@ -461,11 +467,11 @@ pytest && ruff check src/ && mypy src/
 ### Do I always need an OpenSpec proposal?
 No. For trivial fixes (typos, CSS tweaks, documentation), you can skip OpenSpec and run `veri run "your task"` directly. Veridical will still enforce your local quality gates (pytest, ruff, etc.).
 
-### How does Jules know which proposal to use?
-Jules clones your repo and reads `openspec/AGENTS.md`, which instructs it to scan `openspec/changes/` for relevant proposals. Mentioning "per approved proposal" in your command helps Jules focus.
+### How does Veridical find my `tasks.md`?
+Veridical scan `openspec/changes/*/tasks.md` for incomplete tasks. When you run `veri run`, it tries to match your task description to a spec name (e.g., "Implement spec <name>"). If it can't match or you didn't provide a description, it shows an interactive menu of all available specs with open tasks.
 
-### What if I have multiple active proposals?
-Jules will scan the `openspec/changes/` directory. If your task description matches a specific `proposal.md`, it will follow that one. Keep your `change-id` descriptive!
+### Can I skip task verification?
+Yes. Use the `--no-spec` or `--skip-tasks` flag if you're doing work that doesn't have an OpenSpec proposal (like a simple bug fix).
 
 ### Does Veridical work with other languages?
 Yes! While Veridical itself is written in Python, you can configure any command in `.veridical.yaml`. You can use it to supervise Go, Rust, JavaScript, or any project with a CLI-based test suite.
