@@ -1,4 +1,5 @@
 """A lightweight, asynchronous client for OpenAI-compatible LLM endpoints."""
+
 import logging
 from typing import cast
 
