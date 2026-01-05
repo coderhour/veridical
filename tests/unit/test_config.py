@@ -25,7 +25,11 @@ from veridical.config.loader import (
     load_config,
     load_yaml_config,
 )
+from pydantic import ValidationError
+
 from veridical.config.schema import (
+    ConstantBackoffConfig,
+    ExponentialBackoffConfig,
     GitConfig,
     JulesConfig,
     QualityGate,
@@ -68,8 +72,38 @@ class TestJulesConfig:
         """Test default values."""
         config = JulesConfig()
         assert config.api_base_url == "https://jules.googleapis.com/v1alpha"
-        assert config.poll_interval == 30
+        assert isinstance(config.backoff, ExponentialBackoffConfig)
+        assert config.backoff.type == "exponential"
+        assert config.backoff.base_interval == 30.0
         assert config.auto_approve_plans is True
+
+    def test_constant_backoff_config(self) -> None:
+        """Test constant backoff configuration."""
+        config = JulesConfig(backoff={"type": "constant", "interval": 15})
+        assert isinstance(config.backoff, ConstantBackoffConfig)
+        assert config.backoff.type == "constant"
+        assert config.backoff.interval == 15
+
+    def test_exponential_backoff_config(self) -> None:
+        """Test exponential backoff configuration."""
+        config = JulesConfig(
+            backoff={
+                "type": "exponential",
+                "base_interval": 10,
+                "max_interval": 100,
+                "jitter_factor": 0.2,
+            }
+        )
+        assert isinstance(config.backoff, ExponentialBackoffConfig)
+        assert config.backoff.type == "exponential"
+        assert config.backoff.base_interval == 10
+        assert config.backoff.max_interval == 100
+        assert config.backoff.jitter_factor == 0.2
+
+    def test_invalid_backoff_type(self) -> None:
+        """Test invalid backoff type."""
+        with pytest.raises(ValidationError):
+            JulesConfig(backoff={"type": "invalid"})
 
 
 @pytest.mark.unit
@@ -87,10 +121,11 @@ class TestVeridicalConfig:
     def test_custom_values(self) -> None:
         """Test configuration with custom values."""
         config = VeridicalConfig(
-            jules=JulesConfig(poll_interval=60),
+            jules=JulesConfig(backoff={"type": "constant", "interval": 60}),
             supervisor=SupervisorConfig(max_iterations=5),
         )
-        assert config.jules.poll_interval == 60
+        assert isinstance(config.jules.backoff, ConstantBackoffConfig)
+        assert config.jules.backoff.interval == 60
         assert config.supervisor.max_iterations == 5
 
 
@@ -101,7 +136,7 @@ class TestConfigLoading:
     def test_find_config_file_yaml(self, temp_dir: Path) -> None:
         """Test finding .veridical.yaml file."""
         config_file = temp_dir / ".veridical.yaml"
-        config_file.write_text("jules:\n  poll_interval: 60\n")
+        config_file.write_text("jules:\n  backoff:\n    type: constant\n    interval: 60\n")
 
         found = find_config_file(temp_dir)
         assert found == config_file
@@ -109,7 +144,7 @@ class TestConfigLoading:
     def test_find_config_file_yml(self, temp_dir: Path) -> None:
         """Test finding .veridical.yml file."""
         config_file = temp_dir / ".veridical.yml"
-        config_file.write_text("jules:\n  poll_interval: 60\n")
+        config_file.write_text("jules:\n  backoff:\n    type: constant\n    interval: 60\n")
 
         found = find_config_file(temp_dir)
         assert found == config_file
@@ -122,10 +157,10 @@ class TestConfigLoading:
     def test_load_yaml_config(self, temp_dir: Path) -> None:
         """Test loading YAML configuration."""
         config_file = temp_dir / ".veridical.yaml"
-        config_file.write_text("jules:\n  poll_interval: 60\n")
+        config_file.write_text("jules:\n  backoff:\n    type: constant\n    interval: 60\n")
 
         data = load_yaml_config(config_file)
-        assert data["jules"]["poll_interval"] == 60
+        assert data["jules"]["backoff"]["interval"] == 60
 
     def test_load_yaml_config_invalid(self, temp_dir: Path) -> None:
         """Test loading invalid YAML."""
@@ -138,13 +173,13 @@ class TestConfigLoading:
     def test_load_config_with_file(self, sample_config_path: Path) -> None:
         """Test loading config from file."""
         config = load_config(sample_config_path)
-        assert config.jules.poll_interval == 30
+        assert isinstance(config.jules.backoff, ExponentialBackoffConfig)
         assert config.supervisor.max_iterations == 10
 
     def test_load_config_defaults(self) -> None:
         """Test loading config with defaults when no file."""
         config = load_config(require_file=False)
-        assert config.jules.poll_interval == 30  # default value
+        assert isinstance(config.jules.backoff, ExponentialBackoffConfig)
 
     def test_load_config_require_file(self, temp_dir: Path) -> None:
         """Test requiring config file when not present."""
