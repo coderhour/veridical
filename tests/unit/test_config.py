@@ -70,6 +70,24 @@ class TestJulesConfig:
         assert config.api_base_url == "https://jules.googleapis.com/v1alpha"
         assert config.poll_interval == 30
         assert config.auto_approve_plans is True
+        assert config.backoff_strategy == "constant"
+
+    @pytest.mark.parametrize(
+        "strategy",
+        [
+            "constant",
+            "exponential",
+        ],
+    )
+    def test_valid_backoff_strategy(self, strategy: str) -> None:
+        """Test valid backoff strategies."""
+        config = JulesConfig(backoff_strategy=strategy)
+        assert config.backoff_strategy == strategy
+
+    def test_invalid_backoff_strategy(self) -> None:
+        """Test invalid backoff strategy."""
+        with pytest.raises(ValueError):
+            JulesConfig(backoff_strategy="invalid")
 
 
 @pytest.mark.unit

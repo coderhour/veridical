@@ -29,6 +29,7 @@ jules:
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
+  backoff_strategy: constant # "constant" or "exponential"
 
 supervisor:
   max_iterations: 10
@@ -72,6 +73,7 @@ jules:
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
+  backoff_strategy: constant # "constant" or "exponential"
 
 supervisor:
   max_iterations: 10
@@ -111,6 +113,7 @@ jules:
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
+  backoff_strategy: constant # "constant" or "exponential"
 
 supervisor:
   max_iterations: 10
@@ -154,6 +157,7 @@ jules:
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
+  backoff_strategy: constant # "constant" or "exponential"
 
 supervisor:
   max_iterations: 10
@@ -199,6 +203,7 @@ jules:
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
+  backoff_strategy: constant # "constant" or "exponential"
 
 supervisor:
   max_iterations: 10
@@ -242,6 +247,7 @@ jules:
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
+  backoff_strategy: constant # "constant" or "exponential"
 
 supervisor:
   max_iterations: 10
@@ -281,6 +287,7 @@ jules:
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
+  backoff_strategy: constant # "constant" or "exponential"
 
 supervisor:
   max_iterations: 10
@@ -324,6 +331,7 @@ jules:
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
+  backoff_strategy: constant # "constant" or "exponential"
 
 supervisor:
   max_iterations: 10
@@ -359,6 +367,7 @@ jules:
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
+  backoff_strategy: constant # "constant" or "exponential"
 
 supervisor:
   max_iterations: 10
@@ -398,6 +407,7 @@ jules:
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
+  backoff_strategy: constant # "constant" or "exponential"
 
 supervisor:
   max_iterations: 10
