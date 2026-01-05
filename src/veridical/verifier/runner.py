@@ -30,6 +30,18 @@ class CommandRunner:
             Result of running the gate
         """
         start_time = time.monotonic()
+
+        if not gate.command:
+            return GateResult(
+                name=gate.name,
+                command=gate.command,
+                status=GateStatus.ERROR,
+                exit_code=-1,
+                output="",
+                error_output="Gate command is not defined.",
+                duration_seconds=0,
+            )
+
         logger.debug(f"Executing command: {gate.command} (timeout: {gate.timeout}s)")
 
         try:
