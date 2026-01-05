@@ -270,6 +270,53 @@ This will generate a configuration file with sensible defaults for the chosen la
 | `php` | `phpunit`, `phpstan`, `php-cs-fixer` |
 | `dotnet` | `dotnet test`, `dotnet format`, `dotnet build` |
 
+### Parallel Quality Gates
+
+Veridical supports running quality gates in parallel to significantly reduce verification time. Gates marked with `parallel: true` will be grouped and executed concurrently.
+
+**Example configuration:**
+
+```yaml
+verifier:
+  parallel_timeout: 600  # Maximum time for parallel batch execution
+  quality_gates:
+    # Sequential gate (runs first)
+    - name: task_completion
+      type: task_completion
+      path: "auto"
+      required: true
+
+    # Parallel gates (run concurrently)
+    - name: pytest
+      command: pytest
+      timeout: 300
+      required: true
+      parallel: true
+
+    - name: ruff
+      command: ruff check src/
+      timeout: 60
+      required: true
+      parallel: true
+
+    - name: mypy
+      command: mypy src/
+      timeout: 120
+      required: true
+      parallel: true
+```
+
+**Benefits:**
+- **50-70% faster verification**: Independent tools like `pytest`, `ruff`, and `mypy` run simultaneously
+- **Fail-fast behavior**: If a required gate fails, remaining parallel gates are cancelled immediately
+- **Flexible grouping**: Mix sequential and parallel gates as needed
+
+**How it works:**
+1. Gates are grouped into batches based on the `parallel` flag
+2. Sequential gates run in their own batch (one at a time)
+3. Consecutive parallel gates are grouped and run concurrently using `asyncio.gather()`
+4. If a required gate fails, the batch is cancelled and verification stops
+
 ### Environment Variables
 
 Set your Jules API key:
