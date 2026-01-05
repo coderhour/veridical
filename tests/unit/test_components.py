@@ -6,8 +6,10 @@ import pytest
 
 from veridical.dispatcher.agents_md import AgentsMdInjector
 from veridical.dispatcher.prompt import PromptBuilder
+from veridical.config.schema import VeridicalConfig
 from veridical.models.result import GateResult, GateStatus, VerificationResult
 from veridical.poller.backoff import ConstantBackoff, ExponentialBackoff
+from veridical.poller.monitor import Poller
 from veridical.supervisor.circuit_breaker import CircuitBreaker
 from veridical.supervisor.state import SupervisorState, is_valid_transition
 from veridical.verifier.feedback import FeedbackGenerator
@@ -196,6 +198,25 @@ class TestBackoff:
         assert backoff.get_delay(0) == 30.0
         assert backoff.get_delay(5) == 30.0
         assert backoff.get_delay(100) == 30.0
+
+
+@pytest.mark.unit
+class TestPoller:
+    """Tests for the Poller component."""
+
+    def test_uses_constant_backoff_by_default(self, mocker) -> None:
+        """Verify that Poller defaults to ConstantBackoff."""
+        config = VeridicalConfig()
+        assert config.jules.backoff_strategy == "constant"
+        poller = Poller(config=config, api_client=mocker.MagicMock())
+        assert isinstance(poller.backoff, ConstantBackoff)
+
+    def test_can_be_configured_with_exponential_backoff(self, mocker) -> None:
+        """Verify that Poller can be configured to use ExponentialBackoff."""
+        config = VeridicalConfig()
+        config.jules.backoff_strategy = "exponential"
+        poller = Poller(config=config, api_client=mocker.MagicMock())
+        assert isinstance(poller.backoff, ExponentialBackoff)
 
 
 @pytest.mark.unit

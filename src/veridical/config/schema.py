@@ -57,6 +57,10 @@ class JulesConfig(BaseModel):
         ge=60,
         description="Maximum time to wait for session completion in seconds",
     )
+    backoff_strategy: Literal["constant", "exponential"] = Field(
+        "constant",
+        description="Strategy for polling interval backoff ('constant' or 'exponential')",
+    )
     auto_approve_plans: bool = Field(
         True,
         description="Automatically approve plans in autonomous mode",

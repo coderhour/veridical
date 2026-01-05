@@ -24,8 +24,9 @@ PYTHON_CONFIG_TEMPLATE = """\
 
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
-  poll_interval: 30
-  poll_timeout: 3600
+  poll_interval: 30 # Base interval for polling in seconds
+  poll_timeout: 3600 # Max time to wait for a session to complete
+  backoff_strategy: constant # 'constant' or 'exponential'
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -67,8 +68,9 @@ NODEJS_CONFIG_TEMPLATE = """\
 
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
-  poll_interval: 30
-  poll_timeout: 3600
+  poll_interval: 30 # Base interval for polling in seconds
+  poll_timeout: 3600 # Max time to wait for a session to complete
+  backoff_strategy: constant # 'constant' or 'exponential'
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -106,8 +108,9 @@ ELIXIR_CONFIG_TEMPLATE = """\
 
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
-  poll_interval: 30
-  poll_timeout: 3600
+  poll_interval: 30 # Base interval for polling in seconds
+  poll_timeout: 3600 # Max time to wait for a session to complete
+  backoff_strategy: constant # 'constant' or 'exponential'
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -149,8 +152,9 @@ JAVA_CONFIG_TEMPLATE = """\
 
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
-  poll_interval: 30
-  poll_timeout: 3600
+  poll_interval: 30 # Base interval for polling in seconds
+  poll_timeout: 3600 # Max time to wait for a session to complete
+  backoff_strategy: constant # 'constant' or 'exponential'
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -194,8 +198,9 @@ GO_CONFIG_TEMPLATE = """\
 
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
-  poll_interval: 30
-  poll_timeout: 3600
+  poll_interval: 30 # Base interval for polling in seconds
+  poll_timeout: 3600 # Max time to wait for a session to complete
+  backoff_strategy: constant # 'constant' or 'exponential'
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -237,8 +242,9 @@ RUST_CONFIG_TEMPLATE = """\
 
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
-  poll_interval: 30
-  poll_timeout: 3600
+  poll_interval: 30 # Base interval for polling in seconds
+  poll_timeout: 3600 # Max time to wait for a session to complete
+  backoff_strategy: constant # 'constant' or 'exponential'
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -276,8 +282,9 @@ TYPESCRIPT_CONFIG_TEMPLATE = """\
 
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
-  poll_interval: 30
-  poll_timeout: 3600
+  poll_interval: 30 # Base interval for polling in seconds
+  poll_timeout: 3600 # Max time to wait for a session to complete
+  backoff_strategy: constant # 'constant' or 'exponential'
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -319,8 +326,9 @@ RUBY_CONFIG_TEMPLATE = """\
 
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
-  poll_interval: 30
-  poll_timeout: 3600
+  poll_interval: 30 # Base interval for polling in seconds
+  poll_timeout: 3600 # Max time to wait for a session to complete
+  backoff_strategy: constant # 'constant' or 'exponential'
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -354,8 +362,9 @@ PHP_CONFIG_TEMPLATE = """\
 
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
-  poll_interval: 30
-  poll_timeout: 3600
+  poll_interval: 30 # Base interval for polling in seconds
+  poll_timeout: 3600 # Max time to wait for a session to complete
+  backoff_strategy: constant # 'constant' or 'exponential'
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
@@ -393,8 +402,9 @@ DOTNET_CONFIG_TEMPLATE = """\
 
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
-  poll_interval: 30
-  poll_timeout: 3600
+  poll_interval: 30 # Base interval for polling in seconds
+  poll_timeout: 3600 # Max time to wait for a session to complete
+  backoff_strategy: constant # 'constant' or 'exponential'
   auto_approve_plans: true
   max_retries: 3
   retry_delay: 1.0
