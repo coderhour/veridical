@@ -2,34 +2,34 @@
 
 ## Implementation Tasks
 
-- [ ] Add `backoff_strategy` field to `JulesConfig` in `src/veridical/config/schema.py`
+- [x] Add `backoff_strategy` field to `JulesConfig` in `src/veridical/config/schema.py`
   - Type: `Literal["constant", "exponential"]`
   - Default: `"constant"`
   - Description: Strategy for polling interval backoff
 
-- [ ] Update `Poller.__init__` in `src/veridical/poller/monitor.py` to use configured strategy
+- [x] Update `Poller.__init__` in `src/veridical/poller/monitor.py` to use configured strategy
   - Check `config.jules.backoff_strategy` value
   - Instantiate `ConstantBackoff` for `"constant"`, `ExponentialBackoff` for `"exponential"`
   - Import `ConstantBackoff` at module level
 
-- [ ] Update config templates in `src/veridical/config/defaults.py`
+- [x] Update config templates in `src/veridical/config/defaults.py`
   - Add `backoff_strategy: constant` with comment explaining options
   - Update all language templates (python, nodejs, elixir, java, etc.)
 
 ## Testing Tasks
 
-- [ ] Add unit test for Poller with constant backoff strategy
+- [x] Add unit test for Poller with constant backoff strategy
   - Verify delays are consistent across poll attempts
 
-- [ ] Add unit test for Poller with exponential backoff strategy configured
+- [x] Add unit test for Poller with exponential backoff strategy configured
   - Verify delays increase exponentially
 
-- [ ] Add unit test for config loading with backoff_strategy field
+- [x] Add unit test for config loading with backoff_strategy field
   - Verify both `constant` and `exponential` values parse correctly
   - Verify invalid values raise validation error
 
 ## Verification
 
-- [ ] Run `pytest tests/unit/` - all tests pass
-- [ ] Run `ruff check src/` - no linting errors
-- [ ] Run `mypy src/` - no type errors
+- [x] Run `pytest tests/unit/` - all tests pass
+- [x] Run `ruff check src/` - no linting errors
+- [x] Run `mypy src/` - no type errors

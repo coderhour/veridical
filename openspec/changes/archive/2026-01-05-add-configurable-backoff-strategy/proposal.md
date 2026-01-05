@@ -4,7 +4,7 @@
 
 Add a configuration option to select the polling backoff strategy (`constant` or `exponential`) and change the default from `exponential` to `constant`.
 
-## Motivation
+## Why
 
 The current implementation uses exponential backoff for polling Jules sessions, which causes significant delays in detecting session completion:
 
@@ -14,7 +14,7 @@ The current implementation uses exponential backoff for polling Jules sessions, 
 
 Exponential backoff is designed to reduce API load during thundering herd scenarios. However, Veridical operates as a single client polling its own session, making this optimization unnecessary and counterproductive to user experience.
 
-## Proposed Changes
+## What Changes
 
 1. **Add `backoff_strategy` config option** to `JulesConfig` with values `constant` (default) or `exponential`
 2. **Modify Poller** to use the configured strategy instead of hardcoded `ExponentialBackoff`

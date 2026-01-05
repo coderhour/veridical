@@ -71,10 +71,21 @@ class TestJulesConfig:
         """Test default values."""
         config = JulesConfig()
         assert config.api_base_url == "https://jules.googleapis.com/v1alpha"
-        assert isinstance(config.backoff, ExponentialBackoffConfig)
-        assert config.backoff.type == "exponential"
-        assert config.backoff.base_interval == 30.0
+        assert config.backoff_strategy == "constant"
+        assert config.poll_interval == 30.0
+        assert isinstance(config.backoff, ConstantBackoffConfig)
+        assert config.backoff.type == "constant"
         assert config.auto_approve_plans is True
+
+    def test_backoff_strategy_exponential(self) -> None:
+        """Test setting backoff_strategy to exponential."""
+        config = JulesConfig(backoff_strategy="exponential")
+        assert config.backoff_strategy == "exponential"
+
+    def test_invalid_backoff_strategy(self) -> None:
+        """Test invalid backoff_strategy value."""
+        with pytest.raises(ValidationError):
+            JulesConfig(backoff_strategy="invalid")
 
     def test_constant_backoff_config(self) -> None:
         """Test constant backoff configuration."""
@@ -172,13 +183,14 @@ class TestConfigLoading:
     def test_load_config_with_file(self, sample_config_path: Path) -> None:
         """Test loading config from file."""
         config = load_config(sample_config_path)
-        assert isinstance(config.jules.backoff, ExponentialBackoffConfig)
+        # sample_config_path should use defaults if not specified otherwise
+        assert config.jules.backoff_strategy == "constant"
         assert config.supervisor.max_iterations == 10
 
     def test_load_config_defaults(self) -> None:
         """Test loading config with defaults when no file."""
         config = load_config(require_file=False)
-        assert isinstance(config.jules.backoff, ExponentialBackoffConfig)
+        assert config.jules.backoff_strategy == "constant"
 
     def test_load_config_require_file(self, temp_dir: Path) -> None:
         """Test requiring config file when not present."""

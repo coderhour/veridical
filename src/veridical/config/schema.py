@@ -69,9 +69,18 @@ class JulesConfig(BaseModel):
         "https://jules.googleapis.com/v1alpha",
         description="Base URL for Jules API",
     )
+    backoff_strategy: Literal["constant", "exponential"] = Field(
+        "constant",
+        description="Strategy for polling interval backoff",
+    )
+    poll_interval: float = Field(
+        30.0,
+        ge=0,
+        description="Interval in seconds between poll attempts (used for constant strategy)",
+    )
     backoff: BackoffConfig = Field(
-        default_factory=ExponentialBackoffConfig,
-        description="Backoff strategy for polling",
+        default_factory=ConstantBackoffConfig,
+        description="Detailed backoff configuration",
     )
     poll_timeout: int = Field(
         3600,

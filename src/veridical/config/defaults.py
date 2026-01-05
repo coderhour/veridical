@@ -25,6 +25,7 @@ PYTHON_CONFIG_TEMPLATE = """\
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
+  backoff_strategy: constant  # Strategy for polling backoff: constant or exponential
   poll_timeout: 3600
   auto_approve_plans: true
   max_retries: 3
@@ -68,6 +69,7 @@ NODEJS_CONFIG_TEMPLATE = """\
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
+  backoff_strategy: constant  # Strategy for polling backoff: constant or exponential
   poll_timeout: 3600
   auto_approve_plans: true
   max_retries: 3
@@ -107,6 +109,7 @@ ELIXIR_CONFIG_TEMPLATE = """\
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
+  backoff_strategy: constant  # Strategy for polling backoff: constant or exponential
   poll_timeout: 3600
   auto_approve_plans: true
   max_retries: 3
@@ -150,6 +153,7 @@ JAVA_CONFIG_TEMPLATE = """\
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
+  backoff_strategy: constant  # Strategy for polling backoff: constant or exponential
   poll_timeout: 3600
   auto_approve_plans: true
   max_retries: 3
@@ -195,6 +199,7 @@ GO_CONFIG_TEMPLATE = """\
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
+  backoff_strategy: constant  # Strategy for polling backoff: constant or exponential
   poll_timeout: 3600
   auto_approve_plans: true
   max_retries: 3
@@ -238,6 +243,7 @@ RUST_CONFIG_TEMPLATE = """\
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
+  backoff_strategy: constant  # Strategy for polling backoff: constant or exponential
   poll_timeout: 3600
   auto_approve_plans: true
   max_retries: 3
@@ -277,6 +283,7 @@ TYPESCRIPT_CONFIG_TEMPLATE = """\
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
+  backoff_strategy: constant  # Strategy for polling backoff: constant or exponential
   poll_timeout: 3600
   auto_approve_plans: true
   max_retries: 3
@@ -320,6 +327,7 @@ RUBY_CONFIG_TEMPLATE = """\
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
+  backoff_strategy: constant  # Strategy for polling backoff: constant or exponential
   poll_timeout: 3600
   auto_approve_plans: true
   max_retries: 3
@@ -355,6 +363,7 @@ PHP_CONFIG_TEMPLATE = """\
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
+  backoff_strategy: constant  # Strategy for polling backoff: constant or exponential
   poll_timeout: 3600
   auto_approve_plans: true
   max_retries: 3
@@ -394,6 +403,7 @@ DOTNET_CONFIG_TEMPLATE = """\
 jules:
   api_base_url: https://jules.googleapis.com/v1alpha
   poll_interval: 30
+  backoff_strategy: constant  # Strategy for polling backoff: constant or exponential
   poll_timeout: 3600
   auto_approve_plans: true
   max_retries: 3

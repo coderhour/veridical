@@ -1,4 +1,3 @@
-
 import pytest
 
 from veridical.openspec.scanner import find_open_specs

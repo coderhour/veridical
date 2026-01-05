@@ -1,5 +1,10 @@
 # poller Specification Delta
 
+## RENAMED Requirements
+
+- FROM: `### Requirement: Exponential Backoff Strategy`
+- TO: `### Requirement: Configurable Backoff Strategy`
+
 ## MODIFIED Requirements
 
 ### Requirement: Configurable Backoff Strategy
