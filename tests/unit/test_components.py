@@ -198,19 +198,24 @@ class TestBackoff:
         assert backoff.get_delay(100) == 30.0
 
 
+from veridical.config.schema import VerifierConfig
+
+
 @pytest.mark.unit
 class TestFeedbackGenerator:
     """Tests for FeedbackGenerator."""
 
-    def test_no_feedback_on_success(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_feedback_on_success(self) -> None:
         """Test empty feedback when all gates pass."""
-        gen = FeedbackGenerator()
+        gen = FeedbackGenerator(config=VerifierConfig())
         result = VerificationResult(passed=True, gates=[], duration_seconds=1.0)
-        assert gen.generate_feedback(result) == ""
+        assert await gen.generate_feedback(result) == ""
 
-    def test_feedback_on_failure(self) -> None:
+    @pytest.mark.asyncio
+    async def test_feedback_on_failure(self) -> None:
         """Test feedback generation on failure."""
-        gen = FeedbackGenerator()
+        gen = FeedbackGenerator(config=VerifierConfig())
         result = VerificationResult(
             passed=False,
             gates=[
@@ -226,13 +231,15 @@ class TestFeedbackGenerator:
             ],
             duration_seconds=1.0,
         )
-        feedback = gen.generate_feedback(result)
+        feedback = await gen.generate_feedback(result)
         assert "pytest" in feedback
         assert "FAILED" in feedback
 
-    def test_feedback_truncation(self) -> None:
+    @pytest.mark.asyncio
+    async def test_feedback_truncation(self) -> None:
         """Test feedback truncation."""
-        gen = FeedbackGenerator(max_length=50)
+        config = VerifierConfig(summary_max_length=100)
+        gen = FeedbackGenerator(config=config)
         result = VerificationResult(
             passed=False,
             gates=[
@@ -248,6 +255,6 @@ class TestFeedbackGenerator:
             ],
             duration_seconds=1.0,
         )
-        feedback = gen.generate_feedback(result)
-        assert len(feedback) <= 50
+        feedback = await gen.generate_feedback(result)
+        assert len(feedback) <= 100
         assert feedback.endswith("...")

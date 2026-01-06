@@ -1,5 +1,6 @@
 import pytest
 
+from veridical.config.schema import VerifierConfig
 from veridical.verifier.feedback import FeedbackGenerator
 
 
@@ -12,7 +13,7 @@ class TestFeedbackCompression:
         output[51] = "FAILED test_foo.py::test_bar"
         raw_output = "\n".join(output)
 
-        gen = FeedbackGenerator()
+        gen = FeedbackGenerator(config=VerifierConfig())
         compressed = gen.compress_log_output(raw_output)
 
         assert "AssertionError" in compressed
@@ -31,7 +32,7 @@ class TestFeedbackCompression:
         output[51] = "[signal SIGSEGV: segmentation violation code=0x1 addr=0x0 pc=0x123456]"
         raw_output = "\n".join(output)
 
-        gen = FeedbackGenerator()
+        gen = FeedbackGenerator(config=VerifierConfig())
         compressed = gen.compress_log_output(raw_output)
 
         assert "panic:" in compressed
@@ -44,7 +45,7 @@ class TestFeedbackCompression:
         output[41] = "    at Object.<anonymous> (/app/index.js:10:1)"
         raw_output = "\n".join(output)
 
-        gen = FeedbackGenerator()
+        gen = FeedbackGenerator(config=VerifierConfig())
         compressed = gen.compress_log_output(raw_output)
 
         assert "ReferenceError" in compressed
@@ -53,13 +54,13 @@ class TestFeedbackCompression:
     def test_compress_short_output(self) -> None:
         """Test no compression for short output."""
         raw_output = "\n".join([f"Line {i}" for i in range(10)])
-        gen = FeedbackGenerator()
+        gen = FeedbackGenerator(config=VerifierConfig())
         compressed = gen.compress_log_output(raw_output)
         assert compressed == raw_output
         assert "..." not in compressed
 
     def test_identify_error_lines(self) -> None:
-        gen = FeedbackGenerator()
+        gen = FeedbackGenerator(config=VerifierConfig())
         text = """\
 Normal line
 Error: failed

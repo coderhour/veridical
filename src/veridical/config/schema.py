@@ -186,6 +186,23 @@ class VerifierConfig(BaseModel):
         None,
         description="Optional local LLM configuration for advanced log analysis",
     )
+    feedback_mode: Literal["heuristic", "rlm", "auto"] = Field(
+        "auto",
+        description=(
+            "Feedback generation mode. "
+            "'heuristic': simple log compression. "
+            "'rlm': Recursive Log-aware summarization with local LLM. "
+            "'auto': use 'rlm' if log exceeds threshold, else 'heuristic'."
+        ),
+    )
+    rlm_threshold: int = Field(
+        1000,
+        ge=100,
+        description=(
+            "Line count threshold to trigger RLM in 'auto' mode. "
+            "Has no effect if mode is not 'auto'."
+        ),
+    )
 
 
 class ScopeValidationConfig(BaseModel):

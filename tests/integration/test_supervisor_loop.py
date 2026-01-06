@@ -62,12 +62,19 @@ async def test_supervisor_one_shot_success(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_supervisor_iterative_repair(tmp_path) -> None:
+@patch("veridical.supervisor.loop.logger")
+async def test_supervisor_iterative_repair(mock_logger, tmp_path) -> None:
     config = MagicMock()
     config.supervisor.max_iterations = 5
     config.git.base_branch = "main"
     config.supervisor.max_consecutive_failures = 3
     config.supervisor.stagnation_threshold = 3
+    # Add verifier config for feedback generator
+    verifier_config = MagicMock()
+    verifier_config.summary_max_length = 2000
+    verifier_config.local_llm = None
+    verifier_config.feedback_mode = "heuristic"
+    config.verifier = verifier_config
     mock_client = MagicMock()
     mock_client.send_message = AsyncMock()  # For iteration 2 feedback
 
@@ -119,7 +126,7 @@ async def test_supervisor_iterative_repair(tmp_path) -> None:
 
         mock_verifier.run_all.side_effect = verify_side_effect
 
-        mock_verifier.generate_feedback.return_value = "Error info"
+        mock_verifier.generate_feedback = AsyncMock(return_value="Error info")
 
         supervisor = Supervisor(config, mock_client, tmp_path)
         result = await supervisor.run("Fix bug")
@@ -136,12 +143,19 @@ async def test_supervisor_iterative_repair(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_supervisor_circuit_breaker(tmp_path) -> None:
+@patch("veridical.supervisor.loop.logger")
+async def test_supervisor_circuit_breaker(mock_logger, tmp_path) -> None:
     config = MagicMock()
     config.supervisor.max_iterations = 2
     config.git.base_branch = "main"
     config.supervisor.max_consecutive_failures = 3
     config.supervisor.stagnation_threshold = 3
+    # Add verifier config for feedback generator
+    verifier_config = MagicMock()
+    verifier_config.summary_max_length = 2000
+    verifier_config.local_llm = None
+    verifier_config.feedback_mode = "heuristic"
+    config.verifier = verifier_config
 
     mock_client = MagicMock()
     mock_client.send_message = AsyncMock()  # For feedback in iterations 2+
@@ -179,7 +193,7 @@ async def test_supervisor_circuit_breaker(tmp_path) -> None:
         mock_verifier = MockVerifier.return_value
         fail_res = VerificationResult(passed=False, gates=[], duration_seconds=1.0)
         mock_verifier.run_all = AsyncMock(return_value=fail_res)
-        mock_verifier.generate_feedback.return_value = "Error"
+        mock_verifier.generate_feedback = AsyncMock(return_value="Error")
 
         supervisor = Supervisor(config, mock_client, tmp_path)
         result = await supervisor.run("Task")

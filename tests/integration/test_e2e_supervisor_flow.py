@@ -16,7 +16,7 @@ This test simulates a full Veridical workflow:
 import subprocess
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -154,7 +154,8 @@ class TestE2ESupervisorFlow:
     """End-to-end test for the complete Supervisor workflow."""
 
     @pytest.mark.asyncio
-    async def test_full_flow_with_one_retry(self, temp_git_repo, test_config):
+    @patch("veridical.supervisor.loop.logger")
+    async def test_full_flow_with_one_retry(self, mock_logger, temp_git_repo, test_config):
         """Test the complete flow: create session → fail verification → retry → succeed.
 
         Flow:
@@ -291,7 +292,7 @@ class TestE2ESupervisorFlow:
         supervisor.verifier.run_all = mock_run_all
 
         # Mock generate_feedback to return a simple error message
-        supervisor.verifier.generate_feedback = MagicMock(
+        supervisor.verifier.generate_feedback = AsyncMock(
             return_value="VERIFICATION FAILED:\n- test-gate: Test failed: expected foo, got bar"
         )
 
@@ -405,7 +406,8 @@ class TestE2ESupervisorFlow:
         mock_client.send_message.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_max_iterations_exceeded(self, temp_git_repo, test_config):
+    @patch("veridical.supervisor.loop.logger")
+    async def test_max_iterations_exceeded(self, mock_logger, temp_git_repo, test_config):
         """Test that supervisor stops after max iterations."""
         # Set max iterations to 2 for faster test
         test_config.supervisor.max_iterations = 2
@@ -460,7 +462,7 @@ class TestE2ESupervisorFlow:
                 ],
             )
         )
-        supervisor.verifier.generate_feedback = MagicMock(return_value="Always failing")
+        supervisor.verifier.generate_feedback = AsyncMock(return_value="Always failing")
 
         # Run the supervisor loop
         result = await supervisor.run("Task that always fails verification")
@@ -535,7 +537,8 @@ class TestE2ESupervisorFlow:
         mock_client.get_session.assert_called_with(session_id)
 
     @pytest.mark.asyncio
-    async def test_branch_state_during_flow(self, temp_git_repo, test_config):
+    @patch("veridical.supervisor.loop.logger")
+    async def test_branch_state_during_flow(self, mock_logger, temp_git_repo, test_config):
         """Test that branch state is correct at each step of the flow."""
         session_id = "test-branch-state"
         branch_states = []
@@ -605,7 +608,7 @@ class TestE2ESupervisorFlow:
             return MagicMock(passed=True, gate_results=[])
 
         supervisor.verifier.run_all = mock_verify
-        supervisor.verifier.generate_feedback = MagicMock(return_value="Failed")
+        supervisor.verifier.generate_feedback = AsyncMock(return_value="Failed")
 
         # Run the supervisor
         result = await supervisor.run("Test branch states")
