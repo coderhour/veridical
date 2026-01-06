@@ -1,6 +1,8 @@
 import os
+
 import pytest
-from veridical.config.schema import VerifierConfig, LocalLLMConfig
+
+from veridical.config.schema import LocalLLMConfig, VerifierConfig
 from veridical.lld.client import LocalLLMClient
 from veridical.models.result import GateResult, GateStatus, VerificationResult
 from veridical.verifier.feedback import FeedbackGenerator

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from veridical.config.schema import VerifierConfig
 from veridical.dispatcher.agents_md import AgentsMdInjector
 from veridical.dispatcher.prompt import PromptBuilder
 from veridical.models.result import GateResult, GateStatus, VerificationResult
@@ -196,9 +197,6 @@ class TestBackoff:
         assert backoff.get_delay(0) == 30.0
         assert backoff.get_delay(5) == 30.0
         assert backoff.get_delay(100) == 30.0
-
-
-from veridical.config.schema import VerifierConfig
 
 
 @pytest.mark.unit

@@ -62,12 +62,9 @@ class FeedbackGenerator:
         content = gate.error_output or gate.output
         num_lines = len(content.splitlines())
 
-        use_rlm = False
-        if self.config.feedback_mode == "rlm":
-            use_rlm = True
-        elif self.config.feedback_mode == "auto":
-            if num_lines > self.config.rlm_threshold:
-                use_rlm = True
+        use_rlm = self.config.feedback_mode == "rlm" or (
+            self.config.feedback_mode == "auto" and num_lines > self.config.rlm_threshold
+        )
 
         if use_rlm and self.llm_client:
             try:
@@ -163,7 +160,7 @@ class FeedbackGenerator:
             for i in range(start, end):
                 keep_indices.add(i)
 
-        sorted_indices = sorted(list(keep_indices))
+        sorted_indices = sorted(keep_indices)
         result_lines = []
         last_idx = -1
         for idx in sorted_indices:

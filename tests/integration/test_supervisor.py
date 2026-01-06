@@ -51,7 +51,7 @@ async def test_supervisor_run_updates_progress(
     _mock_sleep: MagicMock,
     _mock_stderr: MagicMock,
     _mock_stdout: MagicMock,
-    mock_logger: MagicMock,
+    _mock_logger: MagicMock,
     mock_verifier_run: AsyncMock,
     mock_apply_patch: AsyncMock,
     mock_create_session: AsyncMock,

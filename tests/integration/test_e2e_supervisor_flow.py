@@ -155,7 +155,7 @@ class TestE2ESupervisorFlow:
 
     @pytest.mark.asyncio
     @patch("veridical.supervisor.loop.logger")
-    async def test_full_flow_with_one_retry(self, mock_logger, temp_git_repo, test_config):
+    async def test_full_flow_with_one_retry(self, _mock_logger, temp_git_repo, test_config):
         """Test the complete flow: create session → fail verification → retry → succeed.
 
         Flow:
@@ -407,7 +407,7 @@ class TestE2ESupervisorFlow:
 
     @pytest.mark.asyncio
     @patch("veridical.supervisor.loop.logger")
-    async def test_max_iterations_exceeded(self, mock_logger, temp_git_repo, test_config):
+    async def test_max_iterations_exceeded(self, _mock_logger, temp_git_repo, test_config):
         """Test that supervisor stops after max iterations."""
         # Set max iterations to 2 for faster test
         test_config.supervisor.max_iterations = 2
@@ -538,7 +538,7 @@ class TestE2ESupervisorFlow:
 
     @pytest.mark.asyncio
     @patch("veridical.supervisor.loop.logger")
-    async def test_branch_state_during_flow(self, mock_logger, temp_git_repo, test_config):
+    async def test_branch_state_during_flow(self, _mock_logger, temp_git_repo, test_config):
         """Test that branch state is correct at each step of the flow."""
         session_id = "test-branch-state"
         branch_states = []

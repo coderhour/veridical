@@ -1,7 +1,8 @@
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-from veridical.config.schema import VerifierConfig, LocalLLMConfig
+import pytest
+
+from veridical.config.schema import LocalLLMConfig, VerifierConfig
 from veridical.exceptions import VerificationError
 from veridical.lld.client import LocalLLMClient
 from veridical.models.result import GateResult, GateStatus, VerificationResult

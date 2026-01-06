@@ -63,7 +63,7 @@ async def test_supervisor_one_shot_success(tmp_path) -> None:
 
 @pytest.mark.asyncio
 @patch("veridical.supervisor.loop.logger")
-async def test_supervisor_iterative_repair(mock_logger, tmp_path) -> None:
+async def test_supervisor_iterative_repair(_mock_logger, tmp_path) -> None:
     config = MagicMock()
     config.supervisor.max_iterations = 5
     config.git.base_branch = "main"
@@ -144,7 +144,7 @@ async def test_supervisor_iterative_repair(mock_logger, tmp_path) -> None:
 
 @pytest.mark.asyncio
 @patch("veridical.supervisor.loop.logger")
-async def test_supervisor_circuit_breaker(mock_logger, tmp_path) -> None:
+async def test_supervisor_circuit_breaker(_mock_logger, tmp_path) -> None:
     config = MagicMock()
     config.supervisor.max_iterations = 2
     config.git.base_branch = "main"
