@@ -12,7 +12,7 @@ from veridical.supervisor.loop import Supervisor
 @pytest.fixture
 def git_repo(tmp_path: Path) -> Path:
     """Create a git repo in a temporary directory."""
-    subprocess.run(["git", "init"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "init", "-b", "main"], cwd=tmp_path, check=True)
     subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
     (tmp_path / "README.md").write_text("initial commit")
@@ -41,6 +41,7 @@ async def test_supervisor_initializes_progress_reporter(git_repo: Path) -> None:
 @patch("veridical.dispatcher.session.Dispatcher.create_session")
 @patch("veridical.synchronizer.patch.Synchronizer.apply_session_patch")
 @patch("veridical.verifier.quality_gate.Verifier.run_all")
+@patch("veridical.supervisor.loop.logger")
 @patch("sys.stdout")
 @patch("sys.stderr")
 @patch("time.sleep", return_value=None)
@@ -50,6 +51,7 @@ async def test_supervisor_run_updates_progress(
     _mock_sleep: MagicMock,
     _mock_stderr: MagicMock,
     _mock_stdout: MagicMock,
+    _mock_logger: MagicMock,
     mock_verifier_run: AsyncMock,
     mock_apply_patch: AsyncMock,
     mock_create_session: AsyncMock,
@@ -66,14 +68,11 @@ async def test_supervisor_run_updates_progress(
     supervisor_config.stagnation_threshold = 3
     supervisor_config.max_consecutive_failures = 5
     config.supervisor = supervisor_config
-    feedback_config = MagicMock(name="feedback_config")
-    feedback_config.max_length = 4096
     verifier_config = MagicMock(name="verifier_config")
-    verifier_config.feedback = feedback_config
     verifier_config.summary_max_length = 4096
     verifier_config.local_llm = None
+    verifier_config.feedback_mode = "heuristic"
     config.verifier = verifier_config
-    config.log_analyzer = None
     backoff_config = MagicMock(name="backoff_config")
     backoff_config.type = "constant"
     backoff_config.interval = 0.1

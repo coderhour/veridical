@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from veridical.lld.client import LocalLLMClient
 from veridical.models.result import GateResult, GateStatus, VerificationResult
 from veridical.verifier.feedback import FeedbackGenerator
 from veridical.verifier.runner import CommandRunner
@@ -42,10 +43,6 @@ class Verifier:
         self.config = config
         self.repo_path = repo_path
         self.runner = CommandRunner(repo_path)
-        self.feedback_generator = FeedbackGenerator(
-            max_length=config.verifier.summary_max_length,
-            local_llm_config=config.verifier.local_llm,
-        )
         self.current_tasks_file: Path | None = None
 
     def _group_gates(self, gates: list["QualityGate"]) -> list[list["QualityGate"]]:
@@ -279,7 +276,7 @@ class Verifier:
             duration_seconds=duration,
         )
 
-    def generate_feedback(self, result: VerificationResult) -> str:
+    async def generate_feedback(self, result: VerificationResult) -> str:
         """Generate error feedback from a verification result.
 
         Args:
@@ -288,4 +285,16 @@ class Verifier:
         Returns:
             Error context string for the next iteration
         """
-        return self.feedback_generator.generate_feedback(result)
+        llm_client = None
+        if self.config.verifier.local_llm:
+            llm_client = LocalLLMClient(self.config.verifier.local_llm)
+
+        try:
+            feedback_generator = FeedbackGenerator(
+                config=self.config.verifier,
+                llm_client=llm_client,
+            )
+            return await feedback_generator.generate_feedback(result)
+        finally:
+            if llm_client:
+                await llm_client.close()

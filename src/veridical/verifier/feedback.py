@@ -3,9 +3,11 @@
 import asyncio
 import logging
 
-from veridical.config.schema import LocalLLMConfig
+from veridical.config.schema import VerifierConfig
+from veridical.exceptions import VerificationError
+from veridical.lld.client import LocalLLMClient
 from veridical.models.result import GateResult, VerificationResult
-from veridical.verifier.analysis import LogAnalyzer
+from veridical.verifier import prompts
 
 logger = logging.getLogger(__name__)
 
@@ -14,19 +16,20 @@ class FeedbackGenerator:
     """Generates error summaries for feedback to the next iteration."""
 
     def __init__(
-        self, max_length: int = 2000, local_llm_config: LocalLLMConfig | None = None
+        self,
+        config: VerifierConfig,
+        llm_client: LocalLLMClient | None = None,
     ) -> None:
         """Initialize the feedback generator.
 
         Args:
-            max_length: Maximum length of generated feedback
-            local_llm_config: Optional configuration for local LLM-based analysis
+            config: Verifier configuration
+            llm_client: Optional client for local LLM-based analysis
         """
-        self.max_length = max_length
-        self.local_llm_config = local_llm_config
-        self.log_analyzer = LogAnalyzer(local_llm_config) if local_llm_config else None
+        self.config = config
+        self.llm_client = llm_client
 
-    def generate_feedback(self, result: VerificationResult) -> str:
+    async def generate_feedback(self, result: VerificationResult) -> str:
         """Generate error feedback from verification result.
 
         Args:
@@ -42,127 +45,128 @@ class FeedbackGenerator:
         if not failed_gates:
             return ""
 
-        sections: list[str] = []
-
-        for gate in failed_gates:
-            section = self._summarize_gate(gate)
-            sections.append(section)
+        tasks = [self._summarize_gate(gate) for gate in failed_gates]
+        sections = await asyncio.gather(*tasks)
 
         full_feedback = "\n\n".join(sections)
 
         # Truncate if necessary
-        if len(full_feedback) > self.max_length:
-            full_feedback = full_feedback[: self.max_length - 3] + "..."
+        if len(full_feedback) > self.config.summary_max_length:
+            full_feedback = full_feedback[: self.config.summary_max_length - 3] + "..."
 
         return full_feedback
 
-    def _summarize_gate(self, gate: GateResult) -> str:
-        """Summarize a single gate failure.
-
-        Args:
-            gate: Failed gate result
-
-        Returns:
-            Summary string
-        """
+    async def _summarize_gate(self, gate: GateResult) -> str:
+        """Summarize a single gate failure."""
         lines = [f"## {gate.name} (exit code {gate.exit_code})"]
-
-        # Prioritize error output
         content = gate.error_output or gate.output
+        num_lines = len(content.splitlines())
 
-        # Use RLM-based analysis if available, otherwise fall back to heuristic
-        if self.log_analyzer:
+        use_rlm = self.config.feedback_mode == "rlm" or (
+            self.config.feedback_mode == "auto" and num_lines > self.config.rlm_threshold
+        )
+
+        if use_rlm and self.llm_client:
             try:
                 logger.info(f"Using RLM analysis for gate '{gate.name}'")
-                analyzed = asyncio.run(self.log_analyzer.analyze_log(content, gate.name))
-                lines.append(analyzed)
+                summary = await self._summarize_with_llm(content)
+                lines.append(summary or "(RLM analysis returned no errors)")
             except Exception as e:
                 logger.warning(
                     f"RLM analysis failed for gate '{gate.name}', falling back to heuristic: {e}"
                 )
-                compressed = self.compress_log_output(content)
-                lines.append(compressed)
+                lines.append(self.compress_log_output(content))
         else:
-            # Compress output using heuristic
-            compressed = self.compress_log_output(content)
-            lines.append(compressed)
+            lines.append(self.compress_log_output(content))
 
         return "\n".join(lines)
 
+    async def _summarize_with_llm(self, content: str) -> str:
+        """Summarize log content using the local LLM."""
+        if not self.llm_client or not self.llm_client.config:
+            raise VerificationError("LLM client not configured")
+
+        chunk_size = self.llm_client.config.chunk_size
+        lines = content.splitlines()
+        num_lines = len(lines)
+
+        if num_lines <= chunk_size:
+            # If the content is small enough, summarize it directly
+            prompt = prompts.CHUNK_SUMMARIZATION_PROMPT_TEMPLATE.format(log_content=content)
+            return await self.llm_client.complete(prompt, system_prompt=prompts.SYSTEM_PROMPT)
+
+        # Otherwise, use recursive summarization
+        return await self._chunk_and_summarize(lines, chunk_size)
+
+    async def _chunk_and_summarize(self, lines: list[str], chunk_size: int) -> str:
+        """Recursively summarize log chunks."""
+        if not self.llm_client:
+            raise VerificationError("LLM client not configured for chunking")
+
+        # Create tasks for summarizing each chunk
+        tasks = []
+        for i in range(0, len(lines), chunk_size):
+            chunk_content = "\n".join(lines[i : i + chunk_size])
+            prompt = prompts.CHUNK_SUMMARIZATION_PROMPT_TEMPLATE.format(log_content=chunk_content)
+            tasks.append(self.llm_client.complete(prompt, system_prompt=prompts.SYSTEM_PROMPT))
+
+        chunk_summaries = await asyncio.gather(*tasks)
+        non_empty_summaries = [s for s in chunk_summaries if s]
+
+        if not non_empty_summaries:
+            return "(Recursive LLM analysis found no errors)"
+
+        # If only one summary was produced, just return it
+        if len(non_empty_summaries) == 1:
+            return non_empty_summaries[0]
+
+        # Combine summaries and perform a final summarization
+        combined_summary = "\n".join(non_empty_summaries)
+        final_prompt = prompts.RECURSIVE_SUMMARIZATION_PROMPT_TEMPLATE.format(
+            summaries=combined_summary
+        )
+        return await self.llm_client.complete(final_prompt, system_prompt=prompts.SYSTEM_PROMPT)
+
     def identify_error_lines(self, output: str) -> list[int]:
-        """Identify line numbers containing potential errors.
-
-        Args:
-            output: multi-line string
-
-        Returns:
-            List of 0-based line indices
-        """
+        """Identify line numbers containing potential errors."""
         error_keywords = {"error", "fail", "exception", "fatal", "panic", "traceback"}
         lines = output.splitlines()
         error_indices = []
         for i, line in enumerate(lines):
-            # Case insensitive check
             if any(kw in line.lower() for kw in error_keywords):
                 error_indices.append(i)
         return error_indices
 
     def compress_log_output(self, output: str, context_lines: int = 5) -> str:
-        """Compress log output by retaining errors and context.
-
-        Strategy:
-        1. Find all lines with keywords.
-        2. Keep N lines before/after each matching line.
-        3. Keep first N lines (head) and last N lines (tail).
-        4. Join segments with "..."
-
-        Args:
-            output: Raw log output
-            context_lines: Number of context lines to keep around errors
-
-        Returns:
-            Compressed output
-        """
+        """Compress log output by retaining errors and context."""
         if not output:
             return "(no output)"
 
         lines = output.splitlines()
-        total_lines = len(lines)
-
-        # If short enough, return all
-        if total_lines <= 50:
+        if len(lines) <= 50:
             return output
 
         keep_indices = set()
-
-        # Always keep head and tail
-        head_lines = 10
-        tail_lines = 10
-
-        for i in range(min(head_lines, total_lines)):
+        head_lines, tail_lines = 10, 10
+        for i in range(min(head_lines, len(lines))):
             keep_indices.add(i)
-        for i in range(max(0, total_lines - tail_lines), total_lines):
+        for i in range(max(0, len(lines) - tail_lines), len(lines)):
             keep_indices.add(i)
 
-        # Find errors
         error_indices = self.identify_error_lines(output)
-
-        # Add context around errors
         for idx in error_indices:
             start = max(0, idx - context_lines)
-            end = min(total_lines, idx + context_lines + 1)
+            end = min(len(lines), idx + context_lines + 1)
             for i in range(start, end):
                 keep_indices.add(i)
 
-        # Construct output
         sorted_indices = sorted(keep_indices)
-        result = []
+        result_lines = []
         last_idx = -1
-
         for idx in sorted_indices:
             if last_idx != -1 and idx > last_idx + 1:
-                result.append("...")
-            result.append(lines[idx])
+                result_lines.append("...")
+            result_lines.append(lines[idx])
             last_idx = idx
 
-        return "\n".join(result)
+        return "\n".join(result_lines)

@@ -131,6 +131,7 @@ markers = [
     "unit: Unit tests (fast, no external dependencies)",
     "integration: Integration tests (may use filesystem)",
     "e2e: End-to-end tests (requires Jules API access)",
+    "slow: Slow tests (e.g., involving real network I/O)",
 ]
 filterwarnings = [
     "error",
