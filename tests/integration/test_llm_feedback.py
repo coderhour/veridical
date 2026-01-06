@@ -15,6 +15,7 @@ _llm_model = os.getenv("VERIDICAL_TEST_LLM_MODEL")
 llm_not_configured = not (_llm_base_url and _llm_model)
 llm_skip_reason = "VERIDICAL_TEST_LLM_BASE_URL and VERIDICAL_TEST_LLM_MODEL must be set"
 
+
 @pytest.mark.slow
 @pytest.mark.skipif(llm_not_configured, reason=llm_skip_reason)
 class TestLLMFeedbackIntegration:
@@ -29,7 +30,7 @@ class TestLLMFeedbackIntegration:
         return LocalLLMConfig(
             base_url=_llm_base_url,
             model=_llm_model,
-            api_key="ollama", # Default for Ollama, can be overridden if needed
+            api_key="ollama",  # Default for Ollama, can be overridden if needed
             timeout=60,
         )
 
@@ -38,7 +39,7 @@ class TestLLMFeedbackIntegration:
         """Provides VerifierConfig with the LLM integration enabled."""
         return VerifierConfig(
             local_llm=llm_config,
-            feedback_mode="rlm", # Force RLM for testing
+            feedback_mode="rlm",  # Force RLM for testing
         )
 
     @pytest.mark.asyncio
