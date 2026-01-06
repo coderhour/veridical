@@ -153,7 +153,9 @@ async def test_supervisor_circuit_breaker(tmp_path) -> None:
         patch("veridical.supervisor.loop.Verifier") as MockVerifier,
     ):
         mock_disp = MockDispatcher.return_value
-        mock_disp.create_session = AsyncMock(return_value=MagicMock())
+        session = MagicMock()
+        session.session_id = "sess_1"
+        mock_disp.create_session = AsyncMock(return_value=session)
 
         mock_poller = MockPoller.return_value
         poll_result = MagicMock()
@@ -185,9 +187,8 @@ async def test_supervisor_circuit_breaker(tmp_path) -> None:
         result = await supervisor.run("Task")
 
         assert not result.success
-        # With max_iterations=2, iterations 1 and 2 run, then circuit breaker
-        # opens before iteration 3 can start (check happens after record_iteration)
-        assert result.iterations == 3
+        # With max_iterations=2, iterations 1 and 2 run, then the loop terminates.
+        assert result.iterations == 2
         assert "Maximum iterations" in result.failure_reason
         # Only one session created, subsequent iterations use send_message
         mock_disp.create_session.assert_called_once()

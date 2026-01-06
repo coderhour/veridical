@@ -2,12 +2,12 @@
 
 import subprocess
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from veridical.supervisor.loop import Supervisor
-
+from veridical.models.result import VerificationResult, GateResult, GateStatus, PatchResult
+from veridical.api.models import SessionResponse, SessionState
 
 @pytest.fixture
 def git_repo(tmp_path: Path) -> Path:
@@ -18,6 +18,7 @@ def git_repo(tmp_path: Path) -> Path:
     (tmp_path / "README.md").write_text("initial commit")
     subprocess.run(["git", "add", "README.md"], cwd=tmp_path, check=True)
     subprocess.run(["git", "commit", "-m", "initial commit"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "branch", "-M", "main"], cwd=tmp_path, check=True)
     return tmp_path
 
 
@@ -37,84 +38,39 @@ async def test_supervisor_initializes_progress_reporter(git_repo: Path) -> None:
 
 
 @pytest.mark.asyncio
-@patch("veridical.poller.monitor.Poller.wait_for_completion")
-@patch("veridical.dispatcher.session.Dispatcher.create_session")
-@patch("veridical.synchronizer.patch.Synchronizer.apply_session_patch")
-@patch("veridical.verifier.quality_gate.Verifier.run_all")
-@patch("sys.stdout")
-@patch("sys.stderr")
-@patch("time.sleep", return_value=None)
-@patch("veridical.synchronizer.branch.BranchManager.__init__", return_value=None)
-async def test_supervisor_run_updates_progress(
-    _mock_branch_manager_init: MagicMock,
-    _mock_sleep: MagicMock,
-    _mock_stderr: MagicMock,
-    _mock_stdout: MagicMock,
-    mock_verifier_run: AsyncMock,
-    mock_apply_patch: AsyncMock,
-    mock_create_session: AsyncMock,
-    mock_wait_for_completion: AsyncMock,
-    git_repo: Path,
-) -> None:
+async def test_supervisor_run_updates_progress(git_repo: Path, mocker) -> None:
     """Test that the supervisor run loop updates the progress reporter."""
-    # Mocks
-    config = MagicMock(name="config")
-    # Explicitly build the mock config to avoid issues with nested MagicMock
-    # attributes not being set as expected.
-    supervisor_config = MagicMock(name="supervisor_config")
-    supervisor_config.max_iterations = 2
-    supervisor_config.stagnation_threshold = 3
-    supervisor_config.max_consecutive_failures = 5
-    config.supervisor = supervisor_config
-    feedback_config = MagicMock(name="feedback_config")
-    feedback_config.max_length = 4096
-    verifier_config = MagicMock(name="verifier_config")
-    verifier_config.feedback = feedback_config
-    verifier_config.summary_max_length = 4096
-    verifier_config.local_llm = None
-    config.verifier = verifier_config
-    config.log_analyzer = None
-    backoff_config = MagicMock(name="backoff_config")
-    backoff_config.type = "constant"
-    backoff_config.interval = 0.1
-    jules_config = MagicMock(name="jules_config")
-    jules_config.backoff = backoff_config
-    config.jules = jules_config
+    config = MagicMock()
+    config.supervisor.max_iterations = 2
+    config.supervisor.max_consecutive_failures = 3
+    config.supervisor.stagnation_threshold = 3
+    config.jules.backoff.type = "constant"
+    config.git.base_branch = "main"
+    config.git.branch_prefix = "veridical/iter-"
+    config.jules.backoff.interval = 0.1
     client = AsyncMock()
-    # Mock return values
-    mock_create_session.return_value = MagicMock(session_id="test_session")
-    mock_wait_for_completion.return_value = MagicMock(
-        final_state="COMPLETED",
-    )
-    mock_apply_patch.return_value = MagicMock(success=True, diff_hash="hash")
-    # Ensure the verifier returns a result with failed gates to trigger feedback generation
-    gate_result = MagicMock()
-    gate_result.name = "test-gate"
-    gate_result.exit_code = 1
-    gate_result.output = "test output"
-    gate_result.error_output = "test error output"
-    mock_verifier_run.return_value = MagicMock(passed=False, failed_gates=[gate_result])
-    # Supervisor and mock progress reporter
+
+    mocker.patch("veridical.dispatcher.session.Dispatcher.create_session", return_value=SessionResponse(name="sessions/test_session"))
+    mocker.patch("veridical.poller.monitor.Poller.wait_for_completion", return_value=MagicMock(final_state=SessionState.COMPLETED))
+    mocker.patch("veridical.synchronizer.patch.Synchronizer.apply_session_patch", return_value=PatchResult(success=True, diff_hash="hash", status="applied", files_changed=[]))
+
+    gate_result = GateResult(name="test-gate", status=GateStatus.FAILED, duration_seconds=1.0)
+    mocker.patch("veridical.verifier.quality_gate.Verifier.run_all", return_value=VerificationResult(passed=False, gates=[gate_result], duration_seconds=1.0))
+    mocker.patch("veridical.verifier.feedback.FeedbackGenerator.generate_feedback", return_value="Test feedback")
+
     supervisor = Supervisor(config, client, git_repo, verbose=True)
-    supervisor.synchronizer.branch_manager.base_branch = "main"
-    supervisor.synchronizer.branch_manager.git = supervisor.synchronizer.git
-    supervisor.synchronizer.branch_manager.branch_prefix = "test-iteration-"
-    supervisor.synchronizer.branch_manager.starting_branch = "main"
     mock_progress = MagicMock()
     supervisor.progress = mock_progress
     supervisor.poller.progress = mock_progress
 
-    # Run the loop
-    await supervisor.run("test task")
+    await supervisor.run(task_description="test task")
 
-    # Assertions
     assert mock_progress.set_state.call_count > 0
     mock_progress.set_state.assert_any_call("Creating session...")
     mock_progress.set_state.assert_any_call("Polling for updates...")
     mock_progress.set_state.assert_any_call("Applying patch...")
     mock_progress.set_state.assert_any_call("Running quality gates...")
-    mock_progress.set_state.assert_any_call("Sending feedback...")
+    mock_progress.set_state.assert_any_call("Compiling feedback...")
 
-    # Check iteration updates
     mock_progress.set_iterations.assert_any_call(1, 2)
     mock_progress.set_iterations.assert_any_call(2, 2)

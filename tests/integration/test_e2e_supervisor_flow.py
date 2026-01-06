@@ -128,8 +128,8 @@ def create_session_response(session_id: str, state: SessionState) -> SessionResp
     return SessionResponse(
         name=f"sessions/{session_id}",
         state=state,
-        createTime="2024-01-01T00:00:00Z",
-        updateTime="2024-01-01T00:00:00Z",
+        create_time="2024-01-01T00:00:00Z",
+        update_time="2024-01-01T00:00:00Z",
     )
 
 
@@ -467,9 +467,7 @@ class TestE2ESupervisorFlow:
 
         # Assertions
         assert result.success is False
-        # Circuit breaker trips when iteration_count > max_iterations
-        # With max_iterations=2, it trips on iteration 3 (3 > 2)
-        assert result.iterations == 3, (
+        assert result.iterations == 2, (
             f"Should stop when exceeding max iterations, got {result.iterations}"
         )
         assert "Maximum iterations exceeded" in (result.failure_reason or "")

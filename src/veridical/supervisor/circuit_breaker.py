@@ -48,11 +48,16 @@ class CircuitBreaker:
         """Get the current iteration count."""
         return self._iteration_count
 
+    def is_open_for_next_iteration(self, next_iteration: int) -> bool:
+        """Check if the circuit would be open for the next iteration."""
+        if next_iteration > self.max_iterations:
+            self._trip("Maximum iterations exceeded")
+            return True
+        return self._is_open
+
     def record_iteration(self) -> None:
         """Record a new iteration starting."""
         self._iteration_count += 1
-        if self._iteration_count > self.max_iterations:
-            self._trip("Maximum iterations exceeded")
 
     def record_success(self) -> None:
         """Record a successful iteration."""
@@ -100,9 +105,13 @@ class CircuitBreaker:
                 iterations=self._iteration_count,
             )
 
-    def reset(self) -> None:
-        """Reset the circuit breaker to initial state."""
-        self._iteration_count = 0
+    def reset(self, initial_iteration: int = 1) -> None:
+        """Reset the circuit breaker to initial state.
+
+        Args:
+            initial_iteration: The iteration number to start from (1-based).
+        """
+        self._iteration_count = initial_iteration - 1
         self._consecutive_failures = 0
         self._diff_hashes.clear()
         self._is_open = False
