@@ -51,11 +51,8 @@ class TestCircuitBreaker:
     def test_max_iterations(self) -> None:
         """Test circuit opens after max iterations."""
         cb = CircuitBreaker(max_iterations=3)
-        cb.record_iteration()
-        cb.record_iteration()
-        cb.record_iteration()
-        assert not cb.is_open
-        assert cb.is_open_for_next_iteration(4)
+        for _ in range(4):
+            cb.record_iteration()
         assert cb.is_open
         assert "iterations" in cb.open_reason.lower()
 
@@ -93,8 +90,7 @@ class TestCircuitBreaker:
         cb = CircuitBreaker(max_iterations=2)
         cb.record_iteration()
         cb.record_iteration()
-        assert not cb.is_open
-        assert cb.is_open_for_next_iteration(3)
+        cb.record_iteration()
         assert cb.is_open
         cb.reset()
         assert not cb.is_open

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 from rich.console import Console
 
-from veridical.ui.progress import ProgressReporter
+from veridical.cli.progress import ProgressReporter
 
 
 def test_progress_reporter_initialization() -> None:

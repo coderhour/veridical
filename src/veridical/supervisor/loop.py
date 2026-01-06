@@ -8,13 +8,12 @@ from rich.console import Console
 from veridical.api.client import JulesClient
 from veridical.api.exceptions import APIError
 from veridical.api.models import SessionState
+from veridical.cli.progress import ProgressReporter
 from veridical.dispatcher.session import Dispatcher
 from veridical.models.result import LoopResult
 from veridical.poller.monitor import Poller
-from veridical.ui.progress import ProgressReporter
 from veridical.supervisor.circuit_breaker import CircuitBreaker
 from veridical.supervisor.state import SupervisorState
-from veridical.supervisor.state_model import LoopState
 from veridical.synchronizer.patch import Synchronizer
 from veridical.verifier.quality_gate import Verifier
 
@@ -60,7 +59,6 @@ class Supervisor:
         self.console = console or Console()
 
         self._state = SupervisorState.IDLE
-        self._loop_state: LoopState | None = None
         self._circuit_breaker = CircuitBreaker(
             max_iterations=config.supervisor.max_iterations,
             max_consecutive_failures=config.supervisor.max_consecutive_failures,
@@ -93,26 +91,12 @@ class Supervisor:
         logger.info(f"Transitioning: {self._state} -> {new_state}")
         self._state = new_state
 
-    def save_state_on_shutdown(self) -> None:
-        """Save the current loop state if it exists."""
-        if self._loop_state:
-            self.console.print("\n[bold yellow]Shutdown signal received. Saving state...[/bold yellow]")
-            self._loop_state.save(self.repo_path)
-            self.console.print(f"[dim]State saved to {LoopState.get_state_file_path(self.repo_path)}[/dim]")
-
-    def cleanup_for_shutdown(self) -> None:
-        """Perform cleanup before exiting."""
-        # The main thing is to get out of any temporary iteration branch
-        self.synchronizer.git.checkout(self.synchronizer.starting_branch)
-        logger.info(f"Switched back to starting branch: {self.synchronizer.starting_branch}")
-
     async def run(
         self,
         task_description: str,
         session_id: str | None = None,
         tasks_file: Path | None = None,
         target_branch: str | None = None,
-        force_new: bool = False,
     ) -> LoopResult:
         """Run the supervisor loop for a task.
 
@@ -124,7 +108,6 @@ class Supervisor:
             session_id: Optional session ID to resume instead of creating new session
             tasks_file: Optional path to the tasks.md file for dynamic verification
             target_branch: Optional override for the target branch
-            force_new: Ignore any saved state and start a new loop
 
         Returns:
             Result of the loop execution
@@ -134,68 +117,42 @@ class Supervisor:
             self.verifier.current_tasks_file = tasks_file
             self.dispatcher.current_tasks_file = tasks_file
 
-        # State handling
-        if not force_new:
-            self._loop_state = LoopState.load(self.repo_path)
-
-        if self._loop_state:
-            self.console.print("[bold yellow]Resuming previous loop state...[/bold yellow]")
-            initial_iteration = self._loop_state.iteration
-            error_context = self._loop_state.error_context
-            current_session_id = self._loop_state.session_id
-            if self._loop_state.work_branch:
-                # Important: re-align synchronizer with the saved branch
-                self.synchronizer.work_branch = self._loop_state.work_branch
-        else:
-            # No state, or force_new
-            self._loop_state = LoopState(
-                task_description=task_description,
-                tasks_file=str(tasks_file) if tasks_file else None,
-            )
-            self.synchronizer.setup_work_branch(task_description, target_branch)
-            self._loop_state.work_branch = self.synchronizer.work_branch
-            initial_iteration = 1
-            error_context = None
-            current_session_id = session_id  # Use session from CLI if provided for new run
+        # Set up work branch for this run
+        self.synchronizer.setup_work_branch(task_description, target_branch)
 
         started_at = datetime.now()
-        self._circuit_breaker.reset(initial_iteration=initial_iteration)
+        error_context: str | None = None
+
+        self._circuit_breaker.reset()
+
+        # Track the current session across iterations to reuse it
+        current_session_id: str | None = session_id
 
         with self.progress:
             while not self._circuit_breaker.is_open:
-                iteration = self._circuit_breaker.iteration_count + 1
-                if self._circuit_breaker.is_open_for_next_iteration(iteration):
-                    break
                 self._circuit_breaker.record_iteration()
+                if self._circuit_breaker.is_open:
+                    break
 
+                iteration = self._circuit_breaker.iteration_count
                 logger.info(f"--- Starting Iteration {iteration} ---")
                 self.progress.set_iterations(iteration, self.config.supervisor.max_iterations)
 
-                # Update state at the beginning of the iteration
-                assert self._loop_state is not None
-                self._loop_state.iteration = iteration
-                self._loop_state.session_id = current_session_id
-                self._loop_state.error_context = error_context
-                self._loop_state.save(self.repo_path)
-
                 # 1. DISPATCHING or SENDING FEEDBACK
-                if current_session_id and iteration == 1 and (session_id or self._loop_state):
+                if current_session_id and iteration == 1 and session_id:
                     # Resume existing session - skip dispatching
                     self.progress.set_state("Resuming session...")
                     logger.info(f"Resuming existing session: {current_session_id}")
-                elif current_session_id and (iteration > 1 or error_context):
+                elif current_session_id and iteration > 1:
                     # Send feedback to existing session instead of creating new one
-                    # Also handles the case where we resume from an error state
                     self._transition_to(SupervisorState.DISPATCHING)
                     self.progress.set_state("Sending feedback...")
                     logger.info(f"Sending feedback to existing session: {current_session_id}")
 
                     feedback_prompt = self.dispatcher.build_prompt(task_description, error_context)
                     await self.client.send_message(current_session_id, feedback_prompt)
-                    # Reset error context after sending it
-                    error_context = None
                 else:
-                    # First iteration without existing session or error context
+                    # First iteration - create new session
                     self._transition_to(SupervisorState.DISPATCHING)
                     self.progress.set_state("Creating session...")
                     prompt = self.dispatcher.build_prompt(task_description, error_context)
@@ -203,9 +160,6 @@ class Supervisor:
                     # Create session (auto-detect source)
                     session = await self.dispatcher.create_session(prompt, title=task_description)
                     current_session_id = session.session_id
-                    # Persist the new session ID immediately
-                    self._loop_state.session_id = current_session_id
-                    self._loop_state.save(self.repo_path)
 
                 # 2. POLLING
                 self._transition_to(SupervisorState.POLLING)
@@ -216,7 +170,6 @@ class Supervisor:
                 except TimeoutError:
                     self.synchronizer.git.checkout(self.synchronizer.starting_branch)
                     self._transition_to(SupervisorState.FAILED)
-                    LoopState.clear(self.repo_path)
                     return LoopResult.failure_result(
                         iterations=iteration,
                         started_at=started_at,
@@ -226,17 +179,15 @@ class Supervisor:
                     # Handle API errors (e.g., invalid session ID returns 404)
                     self.synchronizer.git.checkout(self.synchronizer.starting_branch)
                     self._transition_to(SupervisorState.FAILED)
-                    LoopState.clear(self.repo_path)
 
                     # Provide clear message for resumed sessions
-                    if (session_id or self._loop_state) and iteration == 1:
-                        resumed_session_id = session_id or self._loop_state.session_id
+                    if session_id and iteration == 1:
                         return LoopResult.failure_result(
                             iterations=iteration,
                             started_at=started_at,
                             failure_reason="Invalid session ID",
                             error_context=(
-                                f"The session ID '{resumed_session_id}' could not be found. "
+                                f"The session ID '{session_id}' could not be found. "
                                 "Please verify the session ID is correct and try again.\n\n"
                                 f"API Error: {e}"
                             ),
@@ -271,17 +222,15 @@ class Supervisor:
 
                     # If this was a resumed session, abort instead of retrying
                     # The patch was created against a different codebase version
-                    if (session_id or self._loop_state) and iteration == 1:
+                    if session_id and iteration == 1:
                         self.synchronizer.git.checkout(self.synchronizer.starting_branch)
                         self._transition_to(SupervisorState.FAILED)
-                        LoopState.clear(self.repo_path)
-                        resumed_session_id = session_id or self._loop_state.session_id
                         return LoopResult.failure_result(
                             iterations=iteration,
                             started_at=started_at,
                             failure_reason="Resumed session patch failed to apply",
                             error_context=(
-                                f"The patch from session {resumed_session_id} could not be applied. "
+                                f"The patch from session {session_id} could not be applied. "
                                 "This usually means your local code has diverged from what "
                                 "Jules worked against. Try syncing with the remote branch or "
                                 "starting a new session without --session-id.\n\n"
@@ -308,9 +257,6 @@ class Supervisor:
                     commit_hash = self.synchronizer.merge_to_main(iter_branch, task_description)
                     self._circuit_breaker.record_success()
 
-                    # Clear state on success
-                    LoopState.clear(self.repo_path)
-
                     return LoopResult.success_result(
                         iterations=iteration,
                         started_at=started_at,
@@ -332,10 +278,6 @@ class Supervisor:
         # Loop terminated
         self.synchronizer.git.checkout(self.synchronizer.starting_branch)
         self._transition_to(SupervisorState.FAILED)
-
-        # Clear state on failure
-        LoopState.clear(self.repo_path)
-
         return LoopResult.failure_result(
             iterations=self._circuit_breaker.iteration_count,
             started_at=started_at,
