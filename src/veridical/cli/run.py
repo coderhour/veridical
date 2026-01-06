@@ -32,6 +32,7 @@ def run_supervisor(
     verbose: bool,
     tasks_file: Path | None = None,
     target_branch: str | None = None,
+    force_new: bool = False,
 ) -> None:
     """Async wrapper for running the supervisor."""
     try:
@@ -75,7 +76,11 @@ def run_supervisor(
 
                 # Run loop
                 result = await supervisor.run(
-                    task, session_id=session_id, tasks_file=tasks_file, target_branch=target_branch
+                    task,
+                    session_id=session_id,
+                    tasks_file=tasks_file,
+                    target_branch=target_branch,
+                    force_new=force_new,
                 )
 
                 # Report results
@@ -189,6 +194,13 @@ def run(
             help="Override the target branch for merging changes",
         ),
     ] = None,
+    force_new: Annotated[
+        bool,
+        typer.Option(
+            "--force-new",
+            help="Ignore any saved state and start a new session",
+        ),
+    ] = False,
 ) -> None:
     """Start an autonomous task loop with Jules.
 
@@ -266,4 +278,53 @@ def run(
         verbose,
         tasks_file=tasks_file,
         target_branch=target_branch,
+        force_new=force_new,
+    )
+
+
+def resume(
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            "-c",
+            help="Path to configuration file",
+        ),
+    ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Enable verbose output, including activity stream",
+        ),
+    ] = False,
+    max_iterations: Annotated[
+        int | None,
+        typer.Option(
+            "--max-iterations",
+            "-n",
+            help="Maximum number of iterations",
+        ),
+    ] = None,
+) -> None:
+    """Resume a previously interrupted task loop."""
+    from veridical.supervisor.state_model import LoopState
+
+    state = LoopState.load(Path.cwd())
+    if not state:
+        console.print("[bold red]No saved state found. Use 'run' to start a new task.[/bold red]")
+        raise typer.Exit(code=1)
+
+    console.print(f"[bold]Resuming task from state file:[/bold] {state.work_branch}")
+
+    run_supervisor(
+        task=f"Resume task for branch {state.work_branch}",
+        max_iterations=max_iterations,
+        dry_run=False,
+        config_path=config_path,
+        session_id=state.session_id,
+        verbose=verbose,
+        tasks_file=None,  # This could be improved in the future
+        target_branch=None,  # This is loaded from state
     )
