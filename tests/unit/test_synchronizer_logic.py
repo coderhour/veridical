@@ -71,7 +71,7 @@ class TestSynchronizerLogic:
             result = await synchronizer.apply_session_patch(client, "sess_1")
 
             client.download_patch.assert_awaited_once_with("sess_1")
-            mock_applier.apply_patch.assert_called_once_with("raw_diff")
+            mock_applier.apply_patch.assert_called_once_with("raw_diff", skip_review=False)
             assert result.success
 
     def test_create_iteration_branch(self) -> None:

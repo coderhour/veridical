@@ -10,7 +10,7 @@ from veridical.api.exceptions import APIError
 from veridical.api.models import SessionState
 from veridical.cli.progress import ProgressReporter
 from veridical.dispatcher.session import Dispatcher
-from veridical.models.result import LoopResult
+from veridical.models.result import LoopResult, PatchStatus
 from veridical.poller.monitor import Poller
 from veridical.supervisor.circuit_breaker import CircuitBreaker
 from veridical.supervisor.state import SupervisorState
@@ -69,7 +69,7 @@ class Supervisor:
         self.progress = ProgressReporter(console=self.console, verbose=self.verbose)
         self.dispatcher = Dispatcher(config, client, repo_path)
         self.poller = Poller(config, client, progress=self.progress)
-        self.synchronizer = Synchronizer(config, repo_path)
+        self.synchronizer = Synchronizer(config, repo_path, console=self.console)
         self.verifier = Verifier(config, repo_path)
 
     @property
@@ -214,6 +214,53 @@ class Supervisor:
                     self.client,
                     current_session_id,
                 )
+
+                # Handle pending human review
+                if patch_result.status == PatchStatus.PENDING_REVIEW:
+                    self.progress.set_state("Awaiting human review...")
+                    logger.info(
+                        f"Files requiring human review: {patch_result.review_required_files}"
+                    )
+
+                    # Prompt user for approval
+                    pending_patch = self.synchronizer.patch_applier.pending_patch
+                    if pending_patch:
+                        approved = self.synchronizer.prompt_human_review(
+                            patch_result.review_required_files,
+                            pending_patch,
+                        )
+
+                        if approved:
+                            # Apply the pending patch now that it's approved
+                            patch_result = self.synchronizer.apply_pending_patch()
+                            if not patch_result.success:
+                                self._circuit_breaker.record_failure()
+                                self.synchronizer.cleanup_branch(iter_branch)
+                                error_context = (
+                                    f"Patch application failed after approval: {patch_result.error}"
+                                )
+                                continue
+                        else:
+                            # User rejected the changes
+                            self._circuit_breaker.record_failure()
+                            self.synchronizer.cleanup_branch(iter_branch)
+                            self.synchronizer.git.checkout(self.synchronizer.starting_branch)
+                            self._transition_to(SupervisorState.FAILED)
+                            return LoopResult.failure_result(
+                                iterations=iteration,
+                                started_at=started_at,
+                                failure_reason="Human review rejected",
+                                error_context=(
+                                    f"User rejected changes to: "
+                                    f"{', '.join(patch_result.review_required_files)}"
+                                ),
+                            )
+                    else:
+                        # No pending patch stored - unexpected state
+                        self._circuit_breaker.record_failure()
+                        self.synchronizer.cleanup_branch(iter_branch)
+                        error_context = "Pending review but no patch data found"
+                        continue
 
                 if not patch_result.success:
                     self._circuit_breaker.record_failure()

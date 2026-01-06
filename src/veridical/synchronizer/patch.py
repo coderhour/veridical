@@ -8,11 +8,14 @@ from typing import TYPE_CHECKING
 from veridical.models.result import PatchResult, PatchStatus
 from veridical.synchronizer.branch import BranchManager
 from veridical.synchronizer.git import GitWrapper
+from veridical.synchronizer.review import ReviewManager
 from veridical.synchronizer.validator import ScopeValidator
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from rich.console import Console
+
     from veridical.api.client import JulesClient
     from veridical.config.schema import ScopeValidationConfig, VeridicalConfig
 
@@ -24,23 +27,37 @@ class PatchApplier:
         self,
         repo_path: Path,
         validation_config: "ScopeValidationConfig",
+        review_manager: ReviewManager | None = None,
     ) -> None:
         """Initialize the patch applier.
 
         Args:
             repo_path: Path to the repository root
             validation_config: Scope validation configuration
+            review_manager: Optional review manager for tracking approvals
         """
         self.repo_path = repo_path
         self.git = GitWrapper(repo_path)
         self.validator = ScopeValidator(validation_config)
         self.strict_mode = validation_config.strict_mode
+        self.review_manager = review_manager
+        self._pending_patch: str | None = None
 
-    def apply_patch(self, patch_data: str) -> PatchResult:
+    @property
+    def pending_patch(self) -> str | None:
+        """Get the pending patch data awaiting review."""
+        return self._pending_patch
+
+    def apply_patch(
+        self,
+        patch_data: str,
+        skip_review: bool = False,
+    ) -> PatchResult:
         """Apply a patch to the repository.
 
         Args:
             patch_data: Unified diff patch content
+            skip_review: If True, skip human review check (files already approved)
 
         Returns:
             Result of the patch application
@@ -66,12 +83,22 @@ class PatchApplier:
                 logger.warning(f"Scope violations found (non-strict mode):\n{violations_str}")
 
         # Check if human review is required for any files
-        if validation_result.review_required:
-            files_str = ", ".join(validation_result.review_required)
-            logger.info(f"Patch requires human approval for: {files_str}")
-            return PatchResult.pending_review(
-                review_required_files=validation_result.review_required,
-            )
+        if validation_result.review_required and not skip_review:
+            review_files = validation_result.review_required
+
+            # Check if all files are already approved
+            if self.review_manager and self.review_manager.is_fully_approved(
+                review_files, patch_data
+            ):
+                logger.info("All files already approved, proceeding with patch")
+            else:
+                # Store the pending patch for later application after approval
+                self._pending_patch = patch_data
+                files_str = ", ".join(review_files)
+                logger.info(f"Patch requires human approval for: {files_str}")
+                return PatchResult.pending_review(
+                    review_required_files=review_files,
+                )
 
         try:
             logger.info("Applying patch...")
@@ -122,24 +149,31 @@ class Synchronizer:
         self,
         config: "VeridicalConfig",
         repo_path: Path,
+        console: "Console | None" = None,
     ) -> None:
         """Initialize the synchronizer.
 
         Args:
             config: Veridical configuration
             repo_path: Path to the repository root
+            console: Optional rich console for user interaction
         """
+        from rich.console import Console as RichConsole
+
         self.config = config
         self.repo_path = repo_path
+        self.console = console or RichConsole()
         self.git = GitWrapper(repo_path)
         self.branch_manager = BranchManager(
             repo_path,
             base_branch=config.git.base_branch,
             branch_prefix=config.git.branch_prefix,
         )
+        self.review_manager = ReviewManager(console=self.console)
         self.patch_applier = PatchApplier(
             repo_path,
             validation_config=config.git.scope_validation,
+            review_manager=self.review_manager,
         )
         self._work_branch: str | None = None
         self._target_branch_override: str | None = None
@@ -224,16 +258,46 @@ class Synchronizer:
         patch_data = await client.download_patch(session_id)
         return self.apply_patch(patch_data)
 
-    def apply_patch(self, patch_data: str) -> PatchResult:
+    def apply_patch(self, patch_data: str, skip_review: bool = False) -> PatchResult:
         """Apply a patch to the current branch.
 
         Args:
             patch_data: Unified diff patch content
+            skip_review: If True, skip human review check (files already approved)
 
         Returns:
             Result of the patch application
         """
-        return self.patch_applier.apply_patch(patch_data)
+        return self.patch_applier.apply_patch(patch_data, skip_review=skip_review)
+
+    def prompt_human_review(
+        self,
+        review_files: list[str],
+        patch_content: str,
+    ) -> bool:
+        """Prompt the user to review and approve files.
+
+        Args:
+            review_files: List of files requiring review
+            patch_content: The unified diff patch content
+
+        Returns:
+            True if the user approved all files, False if rejected
+        """
+        return self.review_manager.prompt_for_review(review_files, patch_content, self.repo_path)
+
+    def apply_pending_patch(self) -> PatchResult:
+        """Apply the pending patch after human approval.
+
+        Returns:
+            Result of the patch application
+        """
+        if not self.patch_applier.pending_patch:
+            return PatchResult.failed("No pending patch to apply")
+
+        patch_data = self.patch_applier.pending_patch
+        self.patch_applier._pending_patch = None
+        return self.apply_patch(patch_data, skip_review=True)
 
     def commit_changes(self, message: str) -> str:
         """Commit current changes.
