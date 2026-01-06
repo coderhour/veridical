@@ -151,7 +151,6 @@ class Poller:
 
         if self.progress:
             self.progress.set_state("Starting session...")
-            self.progress.set_iterations(0)
 
         logger.info(f"Polling session {session_id} for completion...")
 
@@ -179,7 +178,6 @@ class Poller:
             if self.progress:
                 state_str = session.state.value if session.state else "Unknown"
                 self.progress.set_state(f"State: [bold]{state_str}[/bold]")
-                self.progress.set_iterations(poll_count)
                 await self.stream_activities(session_id)
 
             if session.state != last_state:
