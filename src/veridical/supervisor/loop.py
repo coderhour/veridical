@@ -1,4 +1,7 @@
+import asyncio
+import functools
 import logging
+import signal
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -8,16 +11,17 @@ from rich.console import Console
 from veridical.api.client import JulesClient
 from veridical.api.exceptions import APIError
 from veridical.api.models import SessionState
-from veridical.cli.progress import ProgressReporter
 from veridical.dispatcher.session import Dispatcher
 from veridical.models.result import LoopResult, PatchStatus
 from veridical.poller.monitor import Poller
 from veridical.supervisor.circuit_breaker import CircuitBreaker
 from veridical.supervisor.state import SupervisorState
+from veridical.supervisor.state_model import LoopState
 from veridical.synchronizer.patch import Synchronizer
 from veridical.verifier.quality_gate import Verifier
 
 if TYPE_CHECKING:
+    from veridical.cli.progress import ProgressReporter
     from veridical.config.schema import VeridicalConfig
 
 logger = logging.getLogger(__name__)
@@ -59,14 +63,23 @@ class Supervisor:
         self.console = console or Console()
 
         self._state = SupervisorState.IDLE
+        self._shutdown_event = asyncio.Event()
+        self._current_session_id: str | None = None
+        self._error_context: str | None = None
+        self._tasks_file: Path | None = None
         self._circuit_breaker = CircuitBreaker(
             max_iterations=config.supervisor.max_iterations,
             max_consecutive_failures=config.supervisor.max_consecutive_failures,
             stagnation_threshold=config.supervisor.stagnation_threshold,
         )
 
+        # Defer import to avoid circular dependency
+        from veridical.cli.progress import ProgressReporter
+
         # Initialize components
-        self.progress = ProgressReporter(console=self.console, verbose=self.verbose)
+        self.progress: "ProgressReporter" = ProgressReporter(
+            console=self.console, verbose=self.verbose
+        )
         self.dispatcher = Dispatcher(config, client, repo_path)
         self.poller = Poller(config, client, progress=self.progress)
         self.synchronizer = Synchronizer(config, repo_path, console=self.console)
@@ -91,12 +104,53 @@ class Supervisor:
         logger.info(f"Transitioning: {self._state} -> {new_state}")
         self._state = new_state
 
+    def _save_state(self) -> None:
+        """Save the current loop state."""
+        if not self.synchronizer.work_branch:
+            logger.warning("Cannot save state without a work branch. Skipping.")
+            return
+        state = LoopState(
+            iteration=self._circuit_breaker.iteration_count,
+            session_id=self._current_session_id,
+            error_context=self._error_context,
+            work_branch=self.synchronizer.work_branch,
+            tasks_file=self._tasks_file,
+        )
+        state.save(self.repo_path)
+        logger.info(f"Saved state to {LoopState.state_file_path(self.repo_path)}")
+
+    def _handle_signal(self, signum: int) -> None:
+        """Handle incoming signals for graceful shutdown."""
+        if self._shutdown_event.is_set():
+            logger.warning("Shutdown already in progress.")
+            return
+
+        logger.info(f"Received signal {signum}. Initiating graceful shutdown...")
+        self.console.print("\n[bold yellow]Shutdown requested. Saving state...[/bold yellow]")
+
+        # Save state
+        self._save_state()
+
+        # Signal the main loop to stop
+        self._shutdown_event.set()
+
+    def _setup_signal_handlers(self) -> None:
+        """Set up signal handlers for the current event loop."""
+        loop = asyncio.get_running_loop()
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(
+                signum,
+                functools.partial(self._handle_signal, signum),
+            )
+        logger.info("Signal handlers set up.")
+
     async def run(
         self,
         task_description: str,
         session_id: str | None = None,
         tasks_file: Path | None = None,
         target_branch: str | None = None,
+        force_new: bool = False,
     ) -> LoopResult:
         """Run the supervisor loop for a task.
 
@@ -108,6 +162,7 @@ class Supervisor:
             session_id: Optional session ID to resume instead of creating new session
             tasks_file: Optional path to the tasks.md file for dynamic verification
             target_branch: Optional override for the target branch
+            force_new: Ignore any saved state and start a new session
 
         Returns:
             Result of the loop execution
@@ -116,20 +171,59 @@ class Supervisor:
         if tasks_file:
             self.verifier.current_tasks_file = tasks_file
             self.dispatcher.current_tasks_file = tasks_file
+        self._tasks_file = tasks_file
 
-        # Set up work branch for this run
-        self.synchronizer.setup_work_branch(task_description, target_branch)
+        # Setup signal handlers
+        self._setup_signal_handlers()
+
+        # Load existing state if available
+        loaded_state: LoopState | None = None
+        if not force_new:
+            loaded_state = LoopState.load(self.repo_path)
+            if loaded_state:
+                self.console.print(
+                    f"[bold green]Resuming from saved state in {LoopState.state_file_path(self.repo_path)}[/bold green]"
+                )
+
+        # Restore state or set up new run
+        if loaded_state:
+            self.synchronizer.work_branch = loaded_state.work_branch
+            self._circuit_breaker.iteration_count = loaded_state.iteration
+            self._current_session_id = loaded_state.session_id
+            self._error_context = loaded_state.error_context
+            self._tasks_file = loaded_state.tasks_file
+            if self._tasks_file:
+                self.verifier.current_tasks_file = self._tasks_file
+                self.dispatcher.current_tasks_file = self._tasks_file
+
+            # Validate session ID is still valid
+            if self._current_session_id:
+                try:
+                    await self.client.get_session(self._current_session_id)
+                except APIError:
+                    self.console.print(
+                        f"[bold red]Error:[/bold red] Saved session ID '{self._current_session_id}' is no longer valid."
+                    )
+                    LoopState.clear(self.repo_path)
+                    return LoopResult.failure_result(
+                        iterations=0,
+                        started_at=datetime.now(),
+                        failure_reason="Invalid resumed session ID",
+                    )
+        else:
+            # Set up work branch for this run
+            self.synchronizer.setup_work_branch(task_description, target_branch)
+            self._circuit_breaker.reset()
+            self._current_session_id = session_id
+            self._error_context = None
 
         started_at = datetime.now()
-        error_context: str | None = None
-
-        self._circuit_breaker.reset()
-
-        # Track the current session across iterations to reuse it
-        current_session_id: str | None = session_id
 
         with self.progress:
             while not self._circuit_breaker.is_open:
+                if self._shutdown_event.is_set():
+                    self.console.print("[bold yellow]Stopping event loop.[/bold yellow]")
+                    break
                 self._circuit_breaker.record_iteration()
                 if self._circuit_breaker.is_open:
                     break
@@ -139,34 +233,36 @@ class Supervisor:
                 self.progress.set_iterations(iteration, self.config.supervisor.max_iterations)
 
                 # 1. DISPATCHING or SENDING FEEDBACK
-                if current_session_id and iteration == 1 and session_id:
+                if self._current_session_id and iteration == 1 and session_id:
                     # Resume existing session - skip dispatching
                     self.progress.set_state("Resuming session...")
-                    logger.info(f"Resuming existing session: {current_session_id}")
-                elif current_session_id and iteration > 1:
+                    logger.info(f"Resuming existing session: {self._current_session_id}")
+                elif self._current_session_id and iteration > 1:
                     # Send feedback to existing session instead of creating new one
                     self._transition_to(SupervisorState.DISPATCHING)
                     self.progress.set_state("Sending feedback...")
-                    logger.info(f"Sending feedback to existing session: {current_session_id}")
+                    logger.info(f"Sending feedback to existing session: {self._current_session_id}")
 
-                    feedback_prompt = self.dispatcher.build_prompt(task_description, error_context)
-                    await self.client.send_message(current_session_id, feedback_prompt)
+                    feedback_prompt = self.dispatcher.build_prompt(
+                        task_description, self._error_context
+                    )
+                    await self.client.send_message(self._current_session_id, feedback_prompt)
                 else:
                     # First iteration - create new session
                     self._transition_to(SupervisorState.DISPATCHING)
                     self.progress.set_state("Creating session...")
-                    prompt = self.dispatcher.build_prompt(task_description, error_context)
+                    prompt = self.dispatcher.build_prompt(task_description, self._error_context)
 
                     # Create session (auto-detect source)
                     session = await self.dispatcher.create_session(prompt, title=task_description)
-                    current_session_id = session.session_id
+                    self._current_session_id = session.session_id
 
                 # 2. POLLING
                 self._transition_to(SupervisorState.POLLING)
                 self.progress.set_state("Polling for updates...")
                 try:
-                    assert current_session_id is not None
-                    poll_result = await self.poller.wait_for_completion(current_session_id)
+                    assert self._current_session_id is not None
+                    poll_result = await self.poller.wait_for_completion(self._current_session_id)
                 except TimeoutError:
                     self.synchronizer.git.checkout(self.synchronizer.starting_branch)
                     self._transition_to(SupervisorState.FAILED)
@@ -202,7 +298,7 @@ class Supervisor:
 
                 if poll_result.final_state == SessionState.FAILED:
                     self._circuit_breaker.record_failure()
-                    error_context = f"Jules session {current_session_id} failed"
+                    self._error_context = f"Jules session {self._current_session_id} failed"
                     continue
 
                 # 3. SYNCING
@@ -212,7 +308,7 @@ class Supervisor:
 
                 patch_result = await self.synchronizer.apply_session_patch(
                     self.client,
-                    current_session_id,
+                    self._current_session_id,
                 )
 
                 # Handle pending human review
@@ -236,7 +332,7 @@ class Supervisor:
                             if not patch_result.success:
                                 self._circuit_breaker.record_failure()
                                 self.synchronizer.cleanup_branch(iter_branch)
-                                error_context = (
+                                self._error_context = (
                                     f"Patch application failed after approval: {patch_result.error}"
                                 )
                                 continue
@@ -259,7 +355,7 @@ class Supervisor:
                         # No pending patch stored - unexpected state
                         self._circuit_breaker.record_failure()
                         self.synchronizer.cleanup_branch(iter_branch)
-                        error_context = "Pending review but no patch data found"
+                        self._error_context = "Pending review but no patch data found"
                         continue
 
                 if not patch_result.success:
@@ -285,7 +381,7 @@ class Supervisor:
                             ),
                         )
 
-                    error_context = f"Patch application failed: {patch_result.error}"
+                    self._error_context = f"Patch application failed: {patch_result.error}"
                     continue
 
                 # diff_hash is always set when patch is successfully applied
@@ -304,6 +400,9 @@ class Supervisor:
                     commit_hash = self.synchronizer.merge_to_main(iter_branch, task_description)
                     self._circuit_breaker.record_success()
 
+                    # Clean up state file on success
+                    LoopState.clear(self.repo_path)
+
                     return LoopResult.success_result(
                         iterations=iteration,
                         started_at=started_at,
@@ -314,7 +413,7 @@ class Supervisor:
                 # 6. FAILURE (Loop)
                 self._circuit_breaker.record_failure()
                 self.progress.set_state("Compiling feedback...")
-                error_context = await self.verifier.generate_feedback(verification_result)
+                self._error_context = await self.verifier.generate_feedback(verification_result)
 
                 # Cleanup failed branch to keep repo clean?
                 # Or keep it for inspection?
@@ -325,6 +424,16 @@ class Supervisor:
         # Loop terminated
         self.synchronizer.git.checkout(self.synchronizer.starting_branch)
         self._transition_to(SupervisorState.FAILED)
+
+        # Handle shutdown
+        if self._shutdown_event.is_set():
+            return LoopResult.failure_result(
+                iterations=self._circuit_breaker.iteration_count,
+                started_at=started_at,
+                failure_reason="Shutdown requested",
+            )
+        # Clear state on other failures
+        LoopState.clear(self.repo_path)
         return LoopResult.failure_result(
             iterations=self._circuit_breaker.iteration_count,
             started_at=started_at,
