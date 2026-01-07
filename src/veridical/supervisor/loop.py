@@ -285,8 +285,19 @@ class Supervisor:
                             ),
                         )
 
-                    error_context = f"Patch application failed: {patch_result.error}"
-                    continue
+                    # Patch failures are not recoverable - stop immediately
+                    self.synchronizer.git.checkout(self.synchronizer.starting_branch)
+                    self._transition_to(SupervisorState.FAILED)
+                    return LoopResult.failure_result(
+                        iterations=iteration,
+                        started_at=started_at,
+                        failure_reason="Patch failed to apply",
+                        error_context=(
+                            f"The patch from session {current_session_id} could not be applied. "
+                            "Patch failures are not recoverable through further iterations.\n\n"
+                            f"Details: {patch_result.error}"
+                        ),
+                    )
 
                 # diff_hash is always set when patch is successfully applied
                 assert patch_result.diff_hash is not None
