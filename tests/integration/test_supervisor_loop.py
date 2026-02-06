@@ -167,7 +167,9 @@ async def test_supervisor_circuit_breaker(_mock_logger, tmp_path) -> None:
         patch("veridical.supervisor.loop.Verifier") as MockVerifier,
     ):
         mock_disp = MockDispatcher.return_value
-        mock_disp.create_session = AsyncMock(return_value=MagicMock())
+        session = MagicMock()
+        session.session_id = "sess_1"
+        mock_disp.create_session = AsyncMock(return_value=session)
 
         mock_poller = MockPoller.return_value
         poll_result = MagicMock()

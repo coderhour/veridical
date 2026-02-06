@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from veridical.cli import app
+from veridical.cli.main import app
 from veridical.config.defaults import TemplateType
 
 runner = CliRunner()

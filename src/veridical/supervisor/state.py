@@ -1,6 +1,9 @@
 """Supervisor state machine definitions."""
 
 from enum import Enum, auto
+from pathlib import Path
+
+from pydantic import BaseModel
 
 
 class SupervisorState(Enum):
@@ -59,3 +62,27 @@ def is_valid_transition(from_state: SupervisorState, to_state: SupervisorState) 
         True if the transition is allowed
     """
     return to_state in VALID_TRANSITIONS.get(from_state, set())
+
+
+class LoopState(BaseModel):
+    """Persistent state of the supervisor loop."""
+
+    task_description: str
+    iteration: int
+    session_id: str
+    work_branch: str
+    error_context: str | None = None
+    started_at_timestamp: float = 0.0
+
+    def save(self, path: Path) -> None:
+        """Save state to file."""
+        with path.open("w") as f:
+            f.write(self.model_dump_json(indent=2))
+
+    @classmethod
+    def load(cls, path: Path) -> "LoopState":
+        """Load state from file."""
+        if not path.exists():
+            raise FileNotFoundError(f"State file not found: {path}")
+        with path.open() as f:
+            return cls.model_validate_json(f.read())

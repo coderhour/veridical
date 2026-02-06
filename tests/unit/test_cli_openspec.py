@@ -30,6 +30,7 @@ def test_run_with_explicit_spec(mock_open_specs):
         patch("veridical.cli.run.find_open_specs", return_value=mock_open_specs),
         patch("veridical.cli.run.run_supervisor") as mock_run_supervisor,
         patch("veridical.cli.run.check_spec_status") as mock_check_spec,
+        patch("pathlib.Path.exists", return_value=False),
     ):
         mock_check_spec.return_value.needs_attention = False
 
@@ -48,6 +49,7 @@ def test_run_with_no_args_selects_spec(mock_open_specs):
         patch("veridical.cli.run.select_spec", return_value=mock_open_specs[0]),
         patch("veridical.cli.run.run_supervisor") as mock_run_supervisor,
         patch("veridical.cli.run.check_spec_status") as mock_check_spec,
+        patch("pathlib.Path.exists", return_value=False),
     ):
         mock_check_spec.return_value.needs_attention = False
 
@@ -65,6 +67,7 @@ def test_run_no_spec_flag(mock_open_specs):
         patch("veridical.cli.run.find_open_specs", return_value=mock_open_specs),
         patch("veridical.cli.run.run_supervisor") as mock_run_supervisor,
         patch("veridical.cli.run.check_spec_status") as mock_check_spec,
+        patch("pathlib.Path.exists", return_value=False),
     ):
         mock_check_spec.return_value.needs_attention = False
 
@@ -80,6 +83,7 @@ def test_run_no_task_no_specs_error():
     with (
         patch("veridical.cli.run.find_open_specs", return_value=[]),
         patch("veridical.cli.run.check_spec_status") as mock_check_spec,
+        patch("pathlib.Path.exists", return_value=False),
     ):
         mock_check_spec.return_value.needs_attention = False
 

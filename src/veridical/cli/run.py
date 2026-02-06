@@ -32,6 +32,7 @@ def run_supervisor(
     verbose: bool,
     tasks_file: Path | None = None,
     target_branch: str | None = None,
+    resume_from_state: bool = False,
 ) -> None:
     """Async wrapper for running the supervisor."""
     try:
@@ -75,7 +76,11 @@ def run_supervisor(
 
                 # Run loop
                 result = await supervisor.run(
-                    task, session_id=session_id, tasks_file=tasks_file, target_branch=target_branch
+                    task,
+                    session_id=session_id,
+                    tasks_file=tasks_file,
+                    target_branch=target_branch,
+                    resume_from_state=resume_from_state,
                 )
 
                 # Report results
@@ -189,6 +194,13 @@ def run(
             help="Override the target branch for merging changes",
         ),
     ] = None,
+    force_new: Annotated[
+        bool,
+        typer.Option(
+            "--force-new",
+            help="Ignore existing state and start a new session",
+        ),
+    ] = False,
 ) -> None:
     """Start an autonomous task loop with Jules.
 
@@ -249,6 +261,16 @@ def run(
         console.print(
             "[bold red]Error:[/bold red] No task description provided and no spec selected."
         )
+        raise typer.Exit(code=1)
+
+    # Check for existing state
+    state_file = Path.cwd() / ".veridical_state.json"
+    if state_file.exists() and not force_new and not session_id:
+        console.print(
+            "\n[bold yellow]Warning:[/bold yellow] A saved state file exists from a previous run."
+        )
+        console.print("Run [bold]veridical resume[/bold] to continue where you left off.")
+        console.print("Or use [bold]--force-new[/bold] to ignore the saved state.\n")
         raise typer.Exit(code=1)
 
     if session_id:

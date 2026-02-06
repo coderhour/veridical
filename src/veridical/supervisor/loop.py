@@ -1,6 +1,9 @@
 import logging
+import signal
+import sys
 from datetime import datetime
 from pathlib import Path
+from types import FrameType
 from typing import TYPE_CHECKING
 
 from rich.console import Console
@@ -13,7 +16,7 @@ from veridical.dispatcher.session import Dispatcher
 from veridical.models.result import LoopResult, PatchStatus
 from veridical.poller.monitor import Poller
 from veridical.supervisor.circuit_breaker import CircuitBreaker
-from veridical.supervisor.state import SupervisorState
+from veridical.supervisor.state import LoopState, SupervisorState
 from veridical.synchronizer.patch import Synchronizer
 from veridical.verifier.quality_gate import Verifier
 
@@ -57,6 +60,7 @@ class Supervisor:
         self.repo_path = repo_path
         self.verbose = verbose
         self.console = console or Console()
+        self._current_loop_state: LoopState | None = None
 
         self._state = SupervisorState.IDLE
         self._circuit_breaker = CircuitBreaker(
@@ -97,6 +101,7 @@ class Supervisor:
         session_id: str | None = None,
         tasks_file: Path | None = None,
         target_branch: str | None = None,
+        resume_from_state: bool = False,
     ) -> LoopResult:
         """Run the supervisor loop for a task.
 
@@ -117,16 +122,53 @@ class Supervisor:
             self.verifier.current_tasks_file = tasks_file
             self.dispatcher.current_tasks_file = tasks_file
 
+        state_file = self.repo_path / ".veridical_state.json"
+        current_session_id: str | None = session_id
+        error_context: str | None = None
+        started_at = datetime.now()
+        start_iteration = 1
+
+        # Setup signal handlers for graceful shutdown
+        def signal_handler(signum: int, _frame: FrameType | None) -> None:
+            self._handle_shutdown(signum, state_file)
+
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
+        logger.info("Signal handlers installed (SIGINT, SIGTERM)")
+
+        # Resume from state if requested and file exists
+        if resume_from_state and state_file.exists():
+            try:
+                state = LoopState.load(state_file)
+                logger.info(f"Resuming from saved state (Session: {state.session_id})")
+
+                # Restore context
+                current_session_id = state.session_id
+                start_iteration = state.iteration
+                error_context = state.error_context
+                started_at = datetime.fromtimestamp(state.started_at_timestamp)
+
+                # If target_branch wasn't explicitly provided, use the one from state
+                if not target_branch:
+                    target_branch = state.work_branch
+
+                # Restore circuit breaker state roughly (iteration count)
+                # We can't fully restore diff hashes but iteration count is key
+                self._circuit_breaker._iteration_count = start_iteration - 1
+
+            except Exception as e:
+                logger.error(f"Failed to load state file: {e}")
+                self.console.print(f"[bold red]Warning:[/bold red] Failed to load state: {e}")
+                # Fallback to fresh start? Or exit?
+                # For safety, let's continue as fresh if load fails, but warn.
+
         # Set up work branch for this run
         self.synchronizer.setup_work_branch(task_description, target_branch)
 
-        started_at = datetime.now()
-        error_context: str | None = None
-
-        self._circuit_breaker.reset()
-
-        # Track the current session across iterations to reuse it
-        current_session_id: str | None = session_id
+        # Clear circuit breaker hashes if fresh start, but keep iteration if resumed
+        if not resume_from_state:
+            self._circuit_breaker.reset()
 
         with self.progress:
             while not self._circuit_breaker.is_open:
@@ -135,11 +177,27 @@ class Supervisor:
                     break
 
                 iteration = self._circuit_breaker.iteration_count
+
+                # Update current state object for persistence
+                # We do this at start of iteration so we have a safe "checkpoint"
+                if current_session_id:
+                    self._update_state(
+                        task_description=task_description,
+                        iteration=iteration,
+                        session_id=current_session_id,
+                        work_branch=self.synchronizer.work_branch or "unknown",
+                        error_context=error_context,
+                        started_at=started_at,
+                    )
+                    # Auto-save at start of iteration
+                    if self._current_loop_state:
+                        self._current_loop_state.save(state_file)
+
                 logger.info(f"--- Starting Iteration {iteration} ---")
                 self.progress.set_iterations(iteration, self.config.supervisor.max_iterations)
 
                 # 1. DISPATCHING or SENDING FEEDBACK
-                if current_session_id and iteration == 1 and session_id:
+                if current_session_id and iteration == 1 and (session_id or resume_from_state):
                     # Resume existing session - skip dispatching
                     self.progress.set_state("Resuming session...")
                     logger.info(f"Resuming existing session: {current_session_id}")
@@ -160,6 +218,18 @@ class Supervisor:
                     # Create session (auto-detect source)
                     session = await self.dispatcher.create_session(prompt, title=task_description)
                     current_session_id = session.session_id
+
+                    # Save state immediately after creating session
+                    self._update_state(
+                        task_description=task_description,
+                        iteration=iteration,
+                        session_id=current_session_id,
+                        work_branch=self.synchronizer.work_branch or "unknown",
+                        error_context=error_context,
+                        started_at=started_at,
+                    )
+                    if self._current_loop_state:
+                        self._current_loop_state.save(state_file)
 
                 # 2. POLLING
                 self._transition_to(SupervisorState.POLLING)
@@ -315,6 +385,10 @@ class Supervisor:
                     commit_hash = self.synchronizer.merge_to_main(iter_branch, task_description)
                     self._circuit_breaker.record_success()
 
+                    # Cleanup state file on success
+                    if state_file.exists():
+                        state_file.unlink()
+
                     return LoopResult.success_result(
                         iterations=iteration,
                         started_at=started_at,
@@ -341,3 +415,46 @@ class Supervisor:
             started_at=started_at,
             failure_reason=self._circuit_breaker.open_reason or "Max iterations reached",
         )
+
+    def _update_state(
+        self,
+        task_description: str,
+        iteration: int,
+        session_id: str,
+        work_branch: str,
+        error_context: str | None,
+        started_at: datetime,
+    ) -> None:
+        """Update the current state object."""
+        self._current_loop_state = LoopState(
+            task_description=task_description,
+            iteration=iteration,
+            session_id=session_id,
+            work_branch=work_branch,
+            error_context=error_context,
+            started_at_timestamp=started_at.timestamp(),
+        )
+
+    def _handle_shutdown(self, signum: int, state_file: Path) -> None:
+        """Handle shutdown signals."""
+        logger.info(f"Received signal {signum}. Saving state...")
+        if self._current_loop_state:
+            try:
+                self._current_loop_state.save(state_file)
+                logger.info(f"State saved to {state_file}")
+                if self.console:
+                    self.console.print(
+                        f"\n[yellow]Interrupted. State saved to {state_file}[/yellow]"
+                    )
+                    self.console.print("[dim]Run 'veridical resume' to continue later.[/dim]")
+            except Exception as e:
+                logger.error(f"Failed to save state: {e}")
+
+        # Attempt to return to starting branch to leave repo clean
+        try:
+            if hasattr(self, "synchronizer"):
+                self.synchronizer.git.checkout(self.synchronizer.starting_branch)
+        except Exception as e:
+            logger.warning(f"Failed to cleanup branch on shutdown: {e}")
+
+        sys.exit(0)

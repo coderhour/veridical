@@ -47,6 +47,29 @@ class TestSupervisorSessionResume:
     @pytest.fixture
     def supervisor(self, mock_config: VeridicalConfig, tmp_path: Path) -> Supervisor:
         """Create a supervisor instance with mocked dependencies."""
+        # Initialize git repo to prevent SynchronizationError if mocks fail
+        import subprocess
+
+        subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test User"],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "--allow-empty", "-m", "Initial"],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+        )
+
         with (
             patch("veridical.synchronizer.patch.GitWrapper") as mock_git_patch,
             patch("veridical.synchronizer.branch.GitWrapper") as mock_git_branch,
@@ -54,7 +77,11 @@ class TestSupervisorSessionResume:
             # Mock get_current_branch to return "main" for all tests
             mock_git_patch.return_value.get_current_branch.return_value = "main"
             mock_git_branch.return_value.get_current_branch.return_value = "main"
-            return Supervisor(mock_config, AsyncMock(), tmp_path)
+
+            sup = Supervisor(mock_config, AsyncMock(), tmp_path)
+            # Ensure work_branch is a string to prevent Pydantic ValidationError
+            sup.synchronizer._work_branch = "feat/test-task"
+            yield sup
 
     @pytest.mark.asyncio
     async def test_run_with_session_id_skips_dispatching(self, supervisor: Supervisor) -> None:
