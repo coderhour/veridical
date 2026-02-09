@@ -272,6 +272,19 @@ class Synchronizer:
 
         iter_branch = self.create_iteration_branch(iteration, base_commit=base_commit)
         result = self.apply_patch(patch_data)
+
+        # Build patch summary for work log
+        if result.success and result.files_changed:
+            summary_parts = []
+            if base_commit:
+                summary_parts.append(f"Base commit: {base_commit[:12]}")
+            if git_patch.suggested_commit_message:
+                summary_parts.append(f"Message: {git_patch.suggested_commit_message}")
+            summary_parts.append(f"Files changed ({len(result.files_changed)}):")
+            for f in result.files_changed:
+                summary_parts.append(f"  - {f}")
+            result.patch_summary = "\n".join(summary_parts)
+
         return iter_branch, result
 
     def apply_patch(self, patch_data: str, skip_review: bool = False) -> PatchResult:

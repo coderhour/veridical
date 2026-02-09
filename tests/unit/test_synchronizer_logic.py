@@ -6,6 +6,7 @@ import pytest
 
 from veridical.api.client import JulesClient
 from veridical.api.models import GitPatch
+from veridical.models.result import PatchResult
 from veridical.synchronizer.branch import BranchManager
 from veridical.synchronizer.patch import Synchronizer
 
@@ -95,6 +96,101 @@ class TestSynchronizerLogic:
             assert iter_branch == "veridical/iter-1"
             assert result.success
 
+    @pytest.mark.asyncio
+    async def test_apply_session_patch_without_base_commit(self) -> None:
+        """Test apply_session_patch when GitPatch has no base_commit_id."""
+        with (
+            patch("veridical.synchronizer.patch.GitWrapper"),
+            patch("veridical.synchronizer.patch.BranchManager") as MockManager,
+            patch("veridical.synchronizer.patch.PatchApplier") as MockApplier,
+        ):
+            mock_manager = MockManager.return_value
+            mock_manager.create_iteration_branch.return_value = "veridical/iter-1"
+            mock_applier = MockApplier.return_value
+            mock_applier.apply_patch.return_value = MagicMock(
+                success=True, files_changed=["a.py"], diff_hash="h1"
+            )
+
+            config = MagicMock()
+            config.git.base_branch = "main"
+
+            synchronizer = Synchronizer(config, Path("/tmp"))
+
+            git_patch = GitPatch(unidiff_patch="raw_diff")
+            client = MagicMock()
+            client.download_patch = AsyncMock(return_value=git_patch)
+
+            iter_branch, result = await synchronizer.apply_session_patch(client, "sess_1", 1)
+
+            # base_commit should be None
+            mock_manager.create_iteration_branch.assert_called_once_with(1, base_commit=None)
+            assert iter_branch == "veridical/iter-1"
+            assert result.success
+
+    @pytest.mark.asyncio
+    async def test_apply_session_patch_builds_patch_summary(self) -> None:
+        """Test that patch_summary is built from GitPatch metadata and files_changed."""
+        with (
+            patch("veridical.synchronizer.patch.GitWrapper"),
+            patch("veridical.synchronizer.patch.BranchManager") as MockManager,
+            patch("veridical.synchronizer.patch.PatchApplier") as MockApplier,
+        ):
+            mock_manager = MockManager.return_value
+            mock_manager.create_iteration_branch.return_value = "veridical/iter-1"
+            mock_applier = MockApplier.return_value
+            mock_applier.apply_patch.return_value = PatchResult.applied(
+                files_changed=["src/main.py", "README.md"], diff_hash="h1"
+            )
+
+            config = MagicMock()
+            config.git.base_branch = "main"
+
+            synchronizer = Synchronizer(config, Path("/tmp"))
+
+            git_patch = GitPatch(
+                unidiff_patch="raw_diff",
+                base_commit_id="abc123def456",
+                suggested_commit_message="Fix the bug",
+            )
+            client = MagicMock()
+            client.download_patch = AsyncMock(return_value=git_patch)
+
+            _, result = await synchronizer.apply_session_patch(client, "sess_1", 1)
+
+            assert result.patch_summary is not None
+            assert "Base commit: abc123def456" in result.patch_summary
+            assert "Message: Fix the bug" in result.patch_summary
+            assert "Files changed (2):" in result.patch_summary
+            assert "  - src/main.py" in result.patch_summary
+            assert "  - README.md" in result.patch_summary
+
+    @pytest.mark.asyncio
+    async def test_apply_session_patch_no_summary_on_failure(self) -> None:
+        """Test that patch_summary is not set when patch application fails."""
+        with (
+            patch("veridical.synchronizer.patch.GitWrapper"),
+            patch("veridical.synchronizer.patch.BranchManager") as MockManager,
+            patch("veridical.synchronizer.patch.PatchApplier") as MockApplier,
+        ):
+            mock_manager = MockManager.return_value
+            mock_manager.create_iteration_branch.return_value = "veridical/iter-1"
+            mock_applier = MockApplier.return_value
+            mock_applier.apply_patch.return_value = PatchResult.failed(error="patch does not apply")
+
+            config = MagicMock()
+            config.git.base_branch = "main"
+
+            synchronizer = Synchronizer(config, Path("/tmp"))
+
+            git_patch = GitPatch(unidiff_patch="bad_diff", base_commit_id="abc123")
+            client = MagicMock()
+            client.download_patch = AsyncMock(return_value=git_patch)
+
+            _, result = await synchronizer.apply_session_patch(client, "sess_1", 1)
+
+            assert not result.success
+            assert result.patch_summary is None
+
     def test_create_iteration_branch(self) -> None:
         with (
             patch("veridical.synchronizer.patch.GitWrapper"),
@@ -116,6 +212,34 @@ class TestSynchronizerLogic:
 
 @pytest.mark.unit
 class TestBranchManager:
+    def test_create_iteration_branch_with_base_commit(self) -> None:
+        """Test that create_iteration_branch checks out the base_commit instead of base_branch."""
+        with patch("veridical.synchronizer.branch.GitWrapper") as MockGit:
+            mock_git = MockGit.return_value
+            mock_git.branch_exists.return_value = False
+
+            manager = BranchManager(Path("/tmp"))
+            branch = manager.create_iteration_branch(1, base_commit="abc123def456")
+
+            assert branch == "veridical/iter-1"
+            # Should checkout the base_commit, not the base_branch
+            mock_git.checkout.assert_any_call("abc123def456")
+            mock_git.checkout.assert_any_call("veridical/iter-1", create=True)
+
+    def test_create_iteration_branch_without_base_commit(self) -> None:
+        """Test that create_iteration_branch uses base_branch when no base_commit."""
+        with patch("veridical.synchronizer.branch.GitWrapper") as MockGit:
+            mock_git = MockGit.return_value
+            mock_git.branch_exists.return_value = False
+
+            manager = BranchManager(Path("/tmp"))
+            branch = manager.create_iteration_branch(1)
+
+            assert branch == "veridical/iter-1"
+            # Should checkout the base_branch (default "main")
+            mock_git.checkout.assert_any_call("main")
+            mock_git.checkout.assert_any_call("veridical/iter-1", create=True)
+
     def test_safe_merge_success(self) -> None:
         with patch("veridical.synchronizer.branch.GitWrapper") as MockGit:
             mock_git = MockGit.return_value

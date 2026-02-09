@@ -144,6 +144,7 @@ class PatchResult(BaseModel):
     )
     error: str | None = Field(None, description="Error message if application failed")
     diff_hash: str | None = Field(None, description="Hash of the applied diff")
+    patch_summary: str | None = Field(None, description="Human-readable summary of the patch")
     review_required_files: list[str] = Field(
         default_factory=list,
         description="Files that require human approval before applying",

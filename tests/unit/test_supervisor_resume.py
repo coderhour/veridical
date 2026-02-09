@@ -70,6 +70,10 @@ class TestSupervisorSessionResume:
             capture_output=True,
         )
 
+        # Create a more thorough mock client that prevents real resource creation
+        mock_client = AsyncMock()
+        mock_client._client = None  # Prevent real httpx client creation
+
         with (
             patch("veridical.synchronizer.patch.GitWrapper") as mock_git_patch,
             patch("veridical.synchronizer.branch.GitWrapper") as mock_git_branch,
@@ -78,10 +82,25 @@ class TestSupervisorSessionResume:
             mock_git_patch.return_value.get_current_branch.return_value = "main"
             mock_git_branch.return_value.get_current_branch.return_value = "main"
 
-            sup = Supervisor(mock_config, AsyncMock(), tmp_path)
+            sup = Supervisor(mock_config, mock_client, tmp_path)
             # Ensure work_branch is a string to prevent Pydantic ValidationError
             sup.synchronizer._work_branch = "feat/test-task"
-            yield sup
+
+            try:
+                yield sup
+            finally:
+                # Clean up any resources that might have been created
+                if hasattr(sup.client, "_client") and sup.client._client:
+                    # This shouldn't happen with our mock, but just in case
+                    try:
+                        import asyncio
+
+                        if asyncio.get_event_loop().is_running():
+                            asyncio.create_task(sup.client._client.aclose())  # noqa: RUF006
+                        else:
+                            asyncio.run(sup.client._client.aclose())
+                    except Exception:
+                        pass  # Ignore cleanup errors
 
     @pytest.mark.asyncio
     async def test_run_with_session_id_skips_dispatching(self, supervisor: Supervisor) -> None:

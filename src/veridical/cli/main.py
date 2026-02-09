@@ -8,6 +8,7 @@ from rich.console import Console
 
 from veridical import __version__
 from veridical.cli.config import config_app
+from veridical.cli.local import local_mode
 from veridical.cli.resume import resume
 from veridical.cli.run import run
 from veridical.cli.status import status
@@ -24,6 +25,7 @@ app = typer.Typer(
 
 # Add subcommands
 app.command()(run)
+app.command(name="local")(local_mode)
 app.command()(resume)
 app.command()(verify)
 app.command()(status)

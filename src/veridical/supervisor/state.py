@@ -17,6 +17,7 @@ class SupervisorState(Enum):
     DISPATCHING = auto()
     POLLING = auto()
     SYNCING = auto()
+    RUNNING = auto()  # Used for local execution
     VERIFYING = auto()
     SUCCESS = auto()
     FAILED = auto()
@@ -31,19 +32,26 @@ class SupervisorState(Enum):
             SupervisorState.DISPATCHING,
             SupervisorState.POLLING,
             SupervisorState.SYNCING,
+            SupervisorState.RUNNING,
             SupervisorState.VERIFYING,
         )
 
 
 # Valid state transitions
 VALID_TRANSITIONS: dict[SupervisorState, set[SupervisorState]] = {
-    SupervisorState.IDLE: {SupervisorState.DISPATCHING, SupervisorState.FAILED},
+    SupervisorState.IDLE: {
+        SupervisorState.DISPATCHING,
+        SupervisorState.RUNNING,
+        SupervisorState.FAILED,
+    },
     SupervisorState.DISPATCHING: {SupervisorState.POLLING, SupervisorState.FAILED},
     SupervisorState.POLLING: {SupervisorState.SYNCING, SupervisorState.FAILED},
     SupervisorState.SYNCING: {SupervisorState.VERIFYING, SupervisorState.FAILED},
+    SupervisorState.RUNNING: {SupervisorState.VERIFYING, SupervisorState.FAILED},
     SupervisorState.VERIFYING: {
         SupervisorState.SUCCESS,
-        SupervisorState.DISPATCHING,  # Loop back on failure
+        SupervisorState.DISPATCHING,  # Loop back on failure (remote)
+        SupervisorState.RUNNING,  # Loop back on failure (local)
         SupervisorState.FAILED,
     },
     SupervisorState.SUCCESS: set(),  # Terminal state

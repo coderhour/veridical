@@ -22,6 +22,8 @@ def git_repo(tmp_path: Path) -> Path:
 
 
 @pytest.mark.asyncio
+@pytest.mark.filterwarnings("ignore::ResourceWarning")
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 async def test_supervisor_initializes_progress_reporter(git_repo: Path) -> None:
     """Test that the Supervisor initializes the ProgressReporter."""
     config = MagicMock()

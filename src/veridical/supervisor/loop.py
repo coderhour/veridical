@@ -403,6 +403,10 @@ class Supervisor:
                 assert patch_result.diff_hash is not None
                 self._circuit_breaker.record_diff_hash(patch_result.diff_hash)
 
+                # Record patch summary in work log
+                if self._current_work_log_entry and patch_result.patch_summary:
+                    self._current_work_log_entry.patch_summary = patch_result.patch_summary
+
                 # 4. VERIFYING
                 self._transition_to(SupervisorState.VERIFYING)
                 self.progress.set_state("Running quality gates...")

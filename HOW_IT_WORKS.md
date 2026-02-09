@@ -675,6 +675,56 @@ openspec archive fix-login-validation
 
 ---
 
+## Local Loop Mode
+
+In addition to supervising remote Jules sessions, Veridical can also supervise local agents or scripts. This is useful for:
+- Testing your own AI agents
+- Running local repair scripts
+- Debugging the verification loop without cloud API calls
+
+### Workflow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    LOCAL LOOP                               │
+└─────────────────────────────────────────────────────────────┘
+
+1. RUN WORKER
+   └─> Veridical executes `worker_command`
+       (e.g., "python agent.py")
+
+2. VERIFY
+   └─> Veridical runs quality gates
+
+   ┌─> PASS? → DONE ✅
+   │
+   └─> FAIL? → Generate Feedback → Back to Step 1
+       (sets VERIDICAL_ERROR_CONTEXT env var)
+```
+
+### Example: Testing a Local Agent
+
+```bash
+# veridical.yaml
+local:
+  worker_command: "python my_agent.py --fix"
+  error_env_var: "AGENT_CONTEXT"
+
+# Run it
+veri local "Fix the bug"
+```
+
+1. Veridical runs `python my_agent.py --fix`.
+2. Agent modifies code.
+3. Veridical runs tests. Tests fail.
+4. Veridical captures error output.
+5. Veridical runs `python my_agent.py --fix` again, with `AGENT_CONTEXT` set to the error.
+6. Agent reads error, fixes code.
+7. Veridical runs tests. Pass.
+8. Loop completes.
+
+---
+
 ## Why This Matters
 
 ### The Problem with Traditional AI Coding

@@ -20,6 +20,7 @@ class WorkLogEntry(BaseModel):
     error_context: str | None = None
     prompt_sent: str | None = None
     session_status: str = "unknown"
+    patch_summary: str | None = None
     verification_passed: bool | None = None
     verification_errors: str | None = None
     duration_seconds: float | None = None
