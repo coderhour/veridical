@@ -12,6 +12,7 @@ from veridical.api.models import (
     ActivityEntry,
     ApprovalRequest,
     CreateSessionRequest,
+    GitPatch,
     SendMessageRequest,
     SessionResponse,
 )
@@ -281,14 +282,14 @@ class JulesClient:
         activities = data.get("activities", [])
         return [ActivityEntry.model_validate(a) for a in activities]
 
-    async def download_patch(self, session_id: str) -> str:
+    async def download_patch(self, session_id: str) -> GitPatch:
         """Download patch for a session by extracting it from activities.
 
         Args:
             session_id: ID of the session
 
         Returns:
-            Unified diff content
+            GitPatch containing the unified diff and base commit ID
         """
         logger.info(f"Downloading patch for session {session_id}...")
         activities = await self.get_activities(session_id)
@@ -297,8 +298,8 @@ class JulesClient:
         for activity in reversed(activities):
             for artifact in activity.artifacts:
                 if artifact.change_set and artifact.change_set.git_patch:
-                    patch = artifact.change_set.git_patch.unidiff_patch
-                    if patch:
-                        return patch
+                    git_patch = artifact.change_set.git_patch
+                    if git_patch.unidiff_patch:
+                        return git_patch
 
-        return ""
+        return GitPatch()

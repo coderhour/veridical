@@ -308,11 +308,11 @@ class Supervisor:
                 # 3. SYNCING
                 self._transition_to(SupervisorState.SYNCING)
                 self.progress.set_state("Applying patch...")
-                iter_branch = self.synchronizer.create_iteration_branch(iteration)
 
-                patch_result = await self.synchronizer.apply_session_patch(
+                iter_branch, patch_result = await self.synchronizer.apply_session_patch(
                     self.client,
                     current_session_id,
+                    iteration,
                 )
 
                 # Handle pending human review

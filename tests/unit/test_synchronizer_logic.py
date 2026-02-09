@@ -5,6 +5,7 @@ import httpx
 import pytest
 
 from veridical.api.client import JulesClient
+from veridical.api.models import GitPatch
 from veridical.synchronizer.branch import BranchManager
 from veridical.synchronizer.patch import Synchronizer
 
@@ -16,6 +17,7 @@ class TestJulesClientPatch:
         client = JulesClient(api_key="test")
         session_id = "sess_123"
         diff_content = "diff --git a/foo.py b/foo.py\n..."
+        base_commit = "abc123def456"
 
         respx_mock.get(
             f"https://jules.googleapis.com/v1alpha/sessions/{session_id}/activities"
@@ -24,7 +26,18 @@ class TestJulesClientPatch:
                 200,
                 json={
                     "activities": [
-                        {"artifacts": [{"changeSet": {"gitPatch": {"unidiffPatch": diff_content}}}]}
+                        {
+                            "artifacts": [
+                                {
+                                    "changeSet": {
+                                        "gitPatch": {
+                                            "unidiffPatch": diff_content,
+                                            "baseCommitId": base_commit,
+                                        }
+                                    }
+                                }
+                            ]
+                        }
                     ]
                 },
             )
@@ -32,7 +45,9 @@ class TestJulesClientPatch:
 
         async with client:
             result = await client.download_patch(session_id)
-            assert result == diff_content
+            assert isinstance(result, GitPatch)
+            assert result.unidiff_patch == diff_content
+            assert result.base_commit_id == base_commit
 
     @pytest.mark.asyncio
     async def test_download_patch_empty(self, respx_mock) -> None:
@@ -45,7 +60,8 @@ class TestJulesClientPatch:
 
         async with client:
             result = await client.download_patch(session_id)
-            assert result == ""
+            assert isinstance(result, GitPatch)
+            assert result.unidiff_patch is None
 
 
 @pytest.mark.unit
@@ -54,9 +70,11 @@ class TestSynchronizerLogic:
     async def test_apply_session_patch(self) -> None:
         with (
             patch("veridical.synchronizer.patch.GitWrapper"),
-            patch("veridical.synchronizer.patch.BranchManager"),
+            patch("veridical.synchronizer.patch.BranchManager") as MockManager,
             patch("veridical.synchronizer.patch.PatchApplier") as MockApplier,
         ):
+            mock_manager = MockManager.return_value
+            mock_manager.create_iteration_branch.return_value = "veridical/iter-1"
             mock_applier = MockApplier.return_value
             mock_applier.apply_patch.return_value = MagicMock(success=True)
 
@@ -65,13 +83,16 @@ class TestSynchronizerLogic:
 
             synchronizer = Synchronizer(config, Path("/tmp"))
 
+            git_patch = GitPatch(unidiff_patch="raw_diff", base_commit_id="abc123")
             client = MagicMock()
-            client.download_patch = AsyncMock(return_value="raw_diff")
+            client.download_patch = AsyncMock(return_value=git_patch)
 
-            result = await synchronizer.apply_session_patch(client, "sess_1")
+            iter_branch, result = await synchronizer.apply_session_patch(client, "sess_1", 1)
 
             client.download_patch.assert_awaited_once_with("sess_1")
+            mock_manager.create_iteration_branch.assert_called_once_with(1, base_commit="abc123")
             mock_applier.apply_patch.assert_called_once_with("raw_diff", skip_review=False)
+            assert iter_branch == "veridical/iter-1"
             assert result.success
 
     def test_create_iteration_branch(self) -> None:
@@ -90,7 +111,7 @@ class TestSynchronizerLogic:
             branch = synchronizer.create_iteration_branch(123)
 
             assert branch == "custom-prefix-123"
-            mock_manager.create_iteration_branch.assert_called_once_with(123)
+            mock_manager.create_iteration_branch.assert_called_once_with(123, base_commit=None)
 
 
 @pytest.mark.unit

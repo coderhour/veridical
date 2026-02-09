@@ -39,8 +39,7 @@ async def test_supervisor_one_shot_success(tmp_path) -> None:
         patch_res = PatchResult(
             success=True, status=PatchStatus.APPLIED, files_changed=[], diff_hash="hash1"
         )
-        mock_sync.apply_session_patch = AsyncMock(return_value=patch_res)
-        mock_sync.create_iteration_branch.return_value = "iter-1"
+        mock_sync.apply_session_patch = AsyncMock(return_value=("iter-1", patch_res))
         mock_sync.merge_to_main.return_value = "new_commit_hash"
         mock_sync.work_branch = "feat/fix-bug"
         mock_sync.starting_branch = "main"
@@ -103,8 +102,9 @@ async def test_supervisor_iterative_repair(_mock_logger, tmp_path) -> None:
         patch_res2 = PatchResult(
             success=True, status=PatchStatus.APPLIED, files_changed=[], diff_hash="hash2"
         )
-        mock_sync.apply_session_patch = AsyncMock(side_effect=[patch_res1, patch_res2])
-        mock_sync.create_iteration_branch.side_effect = ["iter-1", "iter-2"]
+        mock_sync.apply_session_patch = AsyncMock(
+            side_effect=[("iter-1", patch_res1), ("iter-2", patch_res2)]
+        )
         mock_sync.merge_to_main.return_value = "final_hash"
         mock_sync.work_branch = "feat/fix-bug"
         mock_sync.starting_branch = "main"
@@ -180,8 +180,11 @@ async def test_supervisor_circuit_breaker(_mock_logger, tmp_path) -> None:
         # Use different hashes to avoid stagnation detection
         patch_hashes = iter(["hash1", "hash2", "hash3"])
 
+        iter_counter = iter([1, 2, 3])
+
         def make_patch_result(*_args, **_kwargs):
-            return PatchResult(
+            i = next(iter_counter)
+            return f"iter-{i}", PatchResult(
                 success=True,
                 status=PatchStatus.APPLIED,
                 files_changed=[],

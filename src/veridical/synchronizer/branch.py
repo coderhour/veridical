@@ -112,13 +112,16 @@ class BranchManager:
 
         return branch_name
 
-    def create_iteration_branch(self, iteration: int) -> str:
+    def create_iteration_branch(self, iteration: int, base_commit: str | None = None) -> str:
         """Create and checkout an iteration branch.
 
         If the branch already exists, it will be deleted and recreated.
 
         Args:
             iteration: Iteration number
+            base_commit: Optional commit to branch from instead of the base branch.
+                         Used when applying a patch that was generated against a
+                         specific commit (e.g. from a resumed Jules session).
 
         Returns:
             Name of the created branch
@@ -126,9 +129,14 @@ class BranchManager:
         branch_name = self.get_iteration_branch_name(iteration)
         logger.info(f"Creating iteration branch: {branch_name}")
 
-        # Ensure we're on base branch
-        logger.debug(f"Checking out base branch: {self.base_branch}")
-        self.git.checkout(self.base_branch)
+        # Determine the starting point
+        start_ref = base_commit or self.base_branch
+        if base_commit:
+            logger.info(f"Branching from base commit: {base_commit[:12]}")
+        else:
+            logger.debug(f"Checking out base branch: {self.base_branch}")
+
+        self.git.checkout(start_ref)
 
         # Delete if exists
         if self.git.branch_exists(branch_name):

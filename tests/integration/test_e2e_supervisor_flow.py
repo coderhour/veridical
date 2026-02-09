@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from veridical.api.client import JulesClient
-from veridical.api.models import SessionResponse, SessionState
+from veridical.api.models import GitPatch, SessionResponse, SessionState
 from veridical.config.schema import (
     GitConfig,
     JulesConfig,
@@ -219,11 +219,17 @@ class TestE2ESupervisorFlow:
 
             if download_patch_count == 1:
                 # First iteration - create a file that will fail verification
-                return create_patch_content("README.md", "# Test Project", "# Updated Project v1")
+                return GitPatch(
+                    unidiff_patch=create_patch_content(
+                        "README.md", "# Test Project", "# Updated Project v1"
+                    )
+                )
             else:
                 # Second iteration - create a file that will pass verification
-                return create_patch_content(
-                    "README.md", "# Test Project", "# Updated Project v2 - Fixed"
+                return GitPatch(
+                    unidiff_patch=create_patch_content(
+                        "README.md", "# Test Project", "# Updated Project v2 - Fixed"
+                    )
                 )
 
         mock_client.download_patch = mock_download_patch
@@ -273,13 +279,16 @@ class TestE2ESupervisorFlow:
 
         # Mock the synchronizer's apply_session_patch to avoid actual git patch application
         # But we still need to create real file changes for the merge to work
-        async def mock_apply_session_patch(_client, _session_id):
+        async def mock_apply_session_patch(_client, _session_id, _iteration):
             nonlocal patch_application_count
             patch_application_count += 1
+            branch_name = f"veridical/iter-{patch_application_count}"
+            # Create a real iteration branch so merge_to_main works
+            supervisor.synchronizer.create_iteration_branch(patch_application_count)
             # Actually modify a file to simulate patch application
             readme = temp_git_repo / "README.md"
             readme.write_text(f"# Updated Project iteration {patch_application_count}\\n")
-            return PatchResult(
+            return branch_name, PatchResult(
                 success=True,
                 files_changed=["README.md"],
                 diff_hash=f"hash{patch_application_count}",
@@ -362,8 +371,10 @@ class TestE2ESupervisorFlow:
 
         # Mock download_patch
         mock_client.download_patch = AsyncMock(
-            return_value=create_patch_content(
-                "README.md", "# Test Project", "# Success on first try"
+            return_value=GitPatch(
+                unidiff_patch=create_patch_content(
+                    "README.md", "# Test Project", "# Success on first try"
+                )
             )
         )
 
@@ -431,15 +442,19 @@ class TestE2ESupervisorFlow:
 
         # Mock download_patch
         mock_client.download_patch = AsyncMock(
-            return_value=create_patch_content("README.md", "# Test Project", "# Always failing")
+            return_value=GitPatch(
+                unidiff_patch=create_patch_content(
+                    "README.md", "# Test Project", "# Always failing"
+                )
+            )
         )
 
         # Create supervisor
         supervisor = Supervisor(test_config, mock_client, temp_git_repo)
 
         # Mock the synchronizer's apply_session_patch to avoid actual git patch application
-        async def mock_apply_session_patch(_client, _session_id):
-            return PatchResult(
+        async def mock_apply_session_patch(_client, _session_id, _iteration):
+            return "veridical/iter-1", PatchResult(
                 success=True,
                 files_changed=["README.md"],
                 diff_hash="abc123",
@@ -500,8 +515,10 @@ class TestE2ESupervisorFlow:
 
         # Mock download_patch
         mock_client.download_patch = AsyncMock(
-            return_value=create_patch_content(
-                "README.md", "# Test Project", "# Resumed session fix"
+            return_value=GitPatch(
+                unidiff_patch=create_patch_content(
+                    "README.md", "# Test Project", "# Resumed session fix"
+                )
             )
         )
 
@@ -565,9 +582,12 @@ class TestE2ESupervisorFlow:
         # But still track the branch state by calling the mock during apply
         apply_patch_count = 0
 
-        async def mock_apply_session_patch(_client, _session_id):
+        async def mock_apply_session_patch(_client, _session_id, _iteration):
             nonlocal apply_patch_count
             apply_patch_count += 1
+            branch_name = f"veridical/iter-{apply_patch_count}"
+            # Create a real iteration branch so merge/cleanup works
+            supervisor.synchronizer.create_iteration_branch(apply_patch_count)
             # Record branch state when patch is applied
             result = subprocess.run(
                 ["git", "branch", "--show-current"],
@@ -577,7 +597,10 @@ class TestE2ESupervisorFlow:
                 text=True,
             )
             branch_states.append(("during_patch_" + str(apply_patch_count), result.stdout.strip()))
-            return PatchResult(
+            # Create a real file change so commit/merge works
+            readme = temp_git_repo / "README.md"
+            readme.write_text(f"# Updated iteration {apply_patch_count}\n")
+            return branch_name, PatchResult(
                 success=True,
                 files_changed=["README.md"],
                 diff_hash=f"hash{apply_patch_count}",

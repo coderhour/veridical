@@ -112,11 +112,11 @@ async def test_supervisor_cleans_up_state_on_success(tmp_path: Path) -> None:
 
     supervisor.poller.wait_for_completion.return_value.final_state = SessionState.COMPLETED
 
-    supervisor.synchronizer.create_iteration_branch = MagicMock(return_value="iter-1")
     supervisor.synchronizer.work_branch = "feat/new-task"  # Ensure this is a string for Pydantic
     supervisor.synchronizer.apply_session_patch = AsyncMock()
-    supervisor.synchronizer.apply_session_patch.return_value = MagicMock(
-        success=True, status="APPLIED", diff_hash="abc"
+    supervisor.synchronizer.apply_session_patch.return_value = (
+        "iter-1",
+        MagicMock(success=True, status="APPLIED", diff_hash="abc"),
     )
     supervisor.synchronizer.merge_to_main = MagicMock(return_value="commit-hash")
 

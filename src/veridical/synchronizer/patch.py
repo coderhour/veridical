@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from rich.console import Console
 
     from veridical.api.client import JulesClient
+    from veridical.api.models import GitPatch
     from veridical.config.schema import ScopeValidationConfig, VeridicalConfig
 
 
@@ -229,34 +230,49 @@ class Synchronizer:
         # Update branch manager's base branch so iterations are created from the target
         self.branch_manager.base_branch = self._work_branch
 
-    def create_iteration_branch(self, iteration: int) -> str:
+    def create_iteration_branch(self, iteration: int, base_commit: str | None = None) -> str:
         """Create and checkout an iteration branch.
 
         Args:
             iteration: Iteration number
+            base_commit: Optional commit to branch from (e.g. Jules' baseCommitId)
 
         Returns:
             Name of the created branch
         """
         logger.info(f"Creating iteration branch for iteration {iteration}")
-        return self.branch_manager.create_iteration_branch(iteration)
+        return self.branch_manager.create_iteration_branch(iteration, base_commit=base_commit)
 
     async def apply_session_patch(
         self,
         client: "JulesClient",
         session_id: str,
-    ) -> PatchResult:
-        """Fetch and apply patch from a session.
+        iteration: int,
+    ) -> tuple[str, PatchResult]:
+        """Fetch patch from a session, create an iteration branch, and apply it.
+
+        The iteration branch is created from the patch's ``baseCommitId`` when
+        available so that the diff applies cleanly against the exact tree Jules
+        worked on.  The branch is then merged forward by the caller.
 
         Args:
             client: API client
             session_id: Session ID
+            iteration: Current iteration number (for branch naming)
 
         Returns:
-            Patch application result
+            Tuple of (iteration_branch_name, patch_result)
         """
-        patch_data = await client.download_patch(session_id)
-        return self.apply_patch(patch_data)
+        git_patch: GitPatch = await client.download_patch(session_id)
+        patch_data = git_patch.unidiff_patch or ""
+        base_commit = git_patch.base_commit_id
+
+        if base_commit:
+            logger.info(f"Patch base commit: {base_commit[:12]}")
+
+        iter_branch = self.create_iteration_branch(iteration, base_commit=base_commit)
+        result = self.apply_patch(patch_data)
+        return iter_branch, result
 
     def apply_patch(self, patch_data: str, skip_review: bool = False) -> PatchResult:
         """Apply a patch to the current branch.

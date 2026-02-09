@@ -108,9 +108,10 @@ class TestSupervisorSessionResume:
         with (
             patch.object(supervisor.poller, "wait_for_completion", return_value=poll_result),
             patch.object(
-                supervisor.synchronizer, "create_iteration_branch", return_value="test-branch"
+                supervisor.synchronizer,
+                "apply_session_patch",
+                return_value=("test-branch", patch_result),
             ),
-            patch.object(supervisor.synchronizer, "apply_session_patch", return_value=patch_result),
             patch.object(supervisor.verifier, "run_all", return_value=verification_result),
             patch.object(supervisor.synchronizer, "merge_to_main", return_value="commit123"),
             patch.object(supervisor.dispatcher, "create_session") as mock_create_session,
@@ -158,9 +159,10 @@ class TestSupervisorSessionResume:
             ) as mock_create_session,
             patch.object(supervisor.poller, "wait_for_completion", return_value=poll_result),
             patch.object(
-                supervisor.synchronizer, "create_iteration_branch", return_value="test-branch"
+                supervisor.synchronizer,
+                "apply_session_patch",
+                return_value=("test-branch", patch_result),
             ),
-            patch.object(supervisor.synchronizer, "apply_session_patch", return_value=patch_result),
             patch.object(supervisor.verifier, "run_all", return_value=verification_result),
             patch.object(supervisor.synchronizer, "merge_to_main", return_value="commit123"),
         ):
@@ -223,12 +225,12 @@ class TestSupervisorSessionResume:
                 side_effect=[poll_result_iter1, poll_result_iter2],
             ),
             patch.object(
-                supervisor.synchronizer, "create_iteration_branch", return_value="test-branch"
-            ),
-            patch.object(
                 supervisor.synchronizer,
                 "apply_session_patch",
-                side_effect=[patch_result1, patch_result2],
+                side_effect=[
+                    ("test-branch-1", patch_result1),
+                    ("test-branch-2", patch_result2),
+                ],
             ),
             patch.object(
                 supervisor.verifier,
@@ -304,9 +306,10 @@ class TestSupervisorSessionResume:
         with (
             patch.object(supervisor.poller, "wait_for_completion", return_value=poll_result),
             patch.object(
-                supervisor.synchronizer, "create_iteration_branch", return_value="test-branch"
+                supervisor.synchronizer,
+                "apply_session_patch",
+                return_value=("test-branch", patch_result),
             ),
-            patch.object(supervisor.synchronizer, "apply_session_patch", return_value=patch_result),
             patch.object(supervisor.synchronizer, "cleanup_branch"),
             patch.object(supervisor.dispatcher, "create_session") as mock_create_session,
         ):

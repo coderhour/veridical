@@ -85,7 +85,7 @@ async def test_supervisor_run_updates_progress(
     mock_wait_for_completion.return_value = MagicMock(
         final_state="COMPLETED",
     )
-    mock_apply_patch.return_value = MagicMock(success=True, diff_hash="hash")
+    mock_apply_patch.return_value = ("test-iter-1", MagicMock(success=True, diff_hash="hash"))
     # Ensure the verifier returns a result with failed gates to trigger feedback generation
     gate_result = MagicMock()
     gate_result.name = "test-gate"
