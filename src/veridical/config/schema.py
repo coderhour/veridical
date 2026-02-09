@@ -126,6 +126,28 @@ class SupervisorConfig(BaseModel):
     )
 
 
+class LocalConfig(BaseModel):
+    """Configuration for local loop mode."""
+
+    worker_command: str = Field(
+        "",
+        description="Command to execute as the AI worker (e.g., 'claude-code', 'aider').",
+    )
+    worker_timeout: int = Field(
+        600,
+        ge=1,
+        description="Timeout in seconds for worker execution.",
+    )
+    mode: Literal["interactive", "subprocess"] = Field(
+        "subprocess",
+        description="Execution mode: 'interactive' (foreground TTY) or 'subprocess' (background).",
+    )
+    error_env_var: str = Field(
+        "VERIDICAL_ERROR_CONTEXT",
+        description="Environment variable name to pass error context to the worker.",
+    )
+
+
 class LocalLLMConfig(BaseModel):
     """Configuration for local LLM integration."""
 
@@ -338,6 +360,7 @@ class VeridicalConfig(BaseSettings):
 
     jules: JulesConfig = Field(default_factory=JulesConfig)
     supervisor: SupervisorConfig = Field(default_factory=SupervisorConfig)
+    local: LocalConfig = Field(default_factory=LocalConfig)
     verifier: VerifierConfig = Field(default_factory=VerifierConfig)
     git: GitConfig = Field(default_factory=GitConfig)
     worklog: WorkLogConfig = Field(default_factory=WorkLogConfig)
