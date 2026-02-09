@@ -52,15 +52,11 @@ def run_local_supervisor(
         # Verify worker command is set
         if not config.local.worker_command:
             console.print("[bold red]Error:[/bold red] No worker command specified.")
-            console.print(
-                "Please provide --worker or set local.worker_command in configuration."
-            )
+            console.print("Please provide --worker or set local.worker_command in configuration.")
             raise typer.Exit(code=1)
 
         async def _run() -> None:
-            supervisor = LocalSupervisor(
-                config, Path.cwd(), verbose=verbose, console=console
-            )
+            supervisor = LocalSupervisor(config, Path.cwd(), verbose=verbose, console=console)
 
             logger.info(f"Starting local supervisor loop for task: {task}")
             logger.info(f"Worker command: {config.local.worker_command}")
@@ -85,9 +81,7 @@ def run_local_supervisor(
             if result.error_context:
                 content += f"\n[bold]Error Context:[/bold]\n{result.error_context}"
 
-            console.print(
-                Panel(content, title=f"[{style}]{title}[/{style}]", border_style=style)
-            )
+            console.print(Panel(content, title=f"[{style}]{title}[/{style}]", border_style=style))
 
             if not result.success:
                 raise typer.Exit(code=1)
@@ -167,9 +161,7 @@ def local(
         console.print(format_spec_warning(spec_status))
         console.print()
         if not typer.confirm("Do you want to continue anyway?", default=False):
-            console.print(
-                "[yellow]Aborted. Push your changes first with: git push[/yellow]"
-            )
+            console.print("[yellow]Aborted. Push your changes first with: git push[/yellow]")
             raise typer.Exit(code=0)
 
     if max_iterations:

@@ -1,7 +1,7 @@
 """Integration test for local loop."""
 
 import sys
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 

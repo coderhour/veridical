@@ -41,7 +41,7 @@ async def test_run_subprocess_with_error_context(runner):
     """Test running a subprocess with error context."""
     # The command will be: sh -c '...' 'task'
     # 'task' becomes $0 inside the script, but we don't use it.
-    runner.config.worker_command = "sh -c 'if [ \"$TEST_ERROR\" = \"fail\" ]; then exit 1; fi'"
+    runner.config.worker_command = 'sh -c \'if [ "$TEST_ERROR" = "fail" ]; then exit 1; fi\''
     runner.config.mode = "subprocess"
 
     exit_code = await runner.run("task", error_context="fail")

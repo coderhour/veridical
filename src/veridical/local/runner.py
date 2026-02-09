@@ -49,6 +49,7 @@ class LocalRunner:
 
     async def _run_interactive(self, command: str, env: dict[str, str]) -> int:
         """Run the command interactively (foreground)."""
+
         # Run in a thread to avoid blocking the event loop
         # We use shell=True to allow complex commands
         def _run() -> int:
@@ -90,7 +91,7 @@ class LocalRunner:
 
             return process.returncode or 0
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"Worker timed out after {self.config.worker_timeout}s")
             try:
                 # process might be unbound if create_subprocess_shell fails, but that raises Exception

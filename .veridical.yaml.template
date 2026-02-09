@@ -64,6 +64,24 @@ supervisor:
   stagnation_threshold: 3
 
 # ------------------------------------------------------------------------------
+# Local Loop Configuration
+# ------------------------------------------------------------------------------
+local:
+  # Command to execute as the AI worker (e.g., 'claude-code', 'aider').
+  # Can be overridden by --worker CLI argument.
+  worker_command: ""
+
+  # Timeout in seconds for worker execution.
+  worker_timeout: 600
+
+  # Execution mode: 'interactive' (foreground TTY) or 'subprocess' (background).
+  # Use 'interactive' for tools that require user input (like aider).
+  mode: subprocess
+
+  # Environment variable name to pass error context to the worker.
+  error_env_var: VERIDICAL_ERROR_CONTEXT
+
+# ------------------------------------------------------------------------------
 # Verifier Configuration
 # ------------------------------------------------------------------------------
 verifier:
