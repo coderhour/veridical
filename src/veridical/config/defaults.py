@@ -36,6 +36,12 @@ supervisor:
   max_consecutive_failures: 3
   stagnation_threshold: 3
 
+local:
+  worker_command: ""
+  worker_timeout: 600
+  mode: subprocess
+  error_env_var: VERIDICAL_ERROR_CONTEXT
+
 verifier:
   quality_gates:
     - name: pytest
@@ -95,6 +101,12 @@ supervisor:
   max_consecutive_failures: 3
   stagnation_threshold: 3
 
+local:
+  worker_command: ""
+  worker_timeout: 600
+  mode: subprocess
+  error_env_var: VERIDICAL_ERROR_CONTEXT
+
 verifier:
   quality_gates:
     - name: npm-test
@@ -141,6 +153,12 @@ supervisor:
   max_iterations: 10
   max_consecutive_failures: 3
   stagnation_threshold: 3
+
+local:
+  worker_command: ""
+  worker_timeout: 600
+  mode: subprocess
+  error_env_var: VERIDICAL_ERROR_CONTEXT
 
 verifier:
   quality_gates:
@@ -192,6 +210,12 @@ supervisor:
   max_iterations: 10
   max_consecutive_failures: 3
   stagnation_threshold: 3
+
+local:
+  worker_command: ""
+  worker_timeout: 600
+  mode: subprocess
+  error_env_var: VERIDICAL_ERROR_CONTEXT
 
 verifier:
   quality_gates:
@@ -246,6 +270,12 @@ supervisor:
   max_consecutive_failures: 3
   stagnation_threshold: 3
 
+local:
+  worker_command: ""
+  worker_timeout: 600
+  mode: subprocess
+  error_env_var: VERIDICAL_ERROR_CONTEXT
+
 verifier:
   quality_gates:
     - name: go-test
@@ -297,6 +327,12 @@ supervisor:
   max_consecutive_failures: 3
   stagnation_threshold: 3
 
+local:
+  worker_command: ""
+  worker_timeout: 600
+  mode: subprocess
+  error_env_var: VERIDICAL_ERROR_CONTEXT
+
 verifier:
   quality_gates:
     - name: cargo-test
@@ -343,6 +379,12 @@ supervisor:
   max_iterations: 10
   max_consecutive_failures: 3
   stagnation_threshold: 3
+
+local:
+  worker_command: ""
+  worker_timeout: 600
+  mode: subprocess
+  error_env_var: VERIDICAL_ERROR_CONTEXT
 
 verifier:
   quality_gates:
@@ -395,6 +437,12 @@ supervisor:
   max_consecutive_failures: 3
   stagnation_threshold: 3
 
+local:
+  worker_command: ""
+  worker_timeout: 600
+  mode: subprocess
+  error_env_var: VERIDICAL_ERROR_CONTEXT
+
 verifier:
   quality_gates:
     - name: rspec
@@ -437,6 +485,12 @@ supervisor:
   max_iterations: 10
   max_consecutive_failures: 3
   stagnation_threshold: 3
+
+local:
+  worker_command: ""
+  worker_timeout: 600
+  mode: subprocess
+  error_env_var: VERIDICAL_ERROR_CONTEXT
 
 verifier:
   quality_gates:
@@ -484,6 +538,12 @@ supervisor:
   max_iterations: 10
   max_consecutive_failures: 3
   stagnation_threshold: 3
+
+local:
+  worker_command: ""
+  worker_timeout: 600
+  mode: subprocess
+  error_env_var: VERIDICAL_ERROR_CONTEXT
 
 verifier:
   quality_gates:

@@ -164,10 +164,30 @@ veri verify
 # Check status of active sessions
 veri status
 
+# Start a local verification loop (run a local command and verify results)
+veri local "Fix the broken code" --worker "python worker.py"
+
 # Override the target branch for merging (default: auto-created from spec/task)
 veri run "Fix login bug" --target-branch bugfix/login-correction
 veri run "Fix login bug" -b bugfix/login-correction
 ```
+
+#### Local Mode
+
+Veridical can also supervise local processes (like local AI agents or scripts) using the `local` command.
+
+```bash
+# Run a local worker script and verify its output
+veri local "Fix the bug" --worker "./my-agent.sh"
+
+# Pass configuration via CLI
+veri local --worker "python agent.py" --max-iterations 5
+```
+
+In local mode:
+1. Veridical runs your `worker` command.
+2. If verification fails, it feeds the error context back to the worker in the next iteration via the `VERIDICAL_ERROR_CONTEXT` environment variable.
+3. The loop continues until verification passes or max iterations are reached.
 
 #### Session Resumption
 

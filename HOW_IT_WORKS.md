@@ -575,7 +575,25 @@ if consecutive_failures >= 3:
     return False
 ```
 
-### 6. **Dynamic AGENTS.md Injection**
+### 6. **Local Loop Mode**
+
+**Challenge:** Sometimes you want to use a local AI agent or script instead of Jules.
+
+**Solution:** Veridical supports a "Local Mode" where the worker is a local command.
+
+```bash
+veridical local "Fix the bug" --worker "./my-agent.sh"
+```
+
+In this mode:
+1. Veridical runs `./my-agent.sh`.
+2. It verifies the results locally.
+3. If verification fails, it sets `VERIDICAL_ERROR_CONTEXT` env var with the error.
+4. It runs `./my-agent.sh` again (which can read the env var and retry).
+
+This allows you to use Veridical's verification loop with ANY tool, not just Jules.
+
+### 7. **Dynamic AGENTS.md Injection**
 
 **Challenge:** Generic instructions don't address specific failures.
 
