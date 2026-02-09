@@ -147,3 +147,5 @@ cython_debug/
 uv.lock
 .veridical.yaml
 !.veridical.yaml.template
+worklog
+.veridical_state.json
