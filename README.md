@@ -169,6 +169,33 @@ veri run "Fix login bug" --target-branch bugfix/login-correction
 veri run "Fix login bug" -b bugfix/login-correction
 ```
 
+### Local Mode (Agent Supervision)
+
+Veridical can supervise local agents or scripts, not just Jules. This is useful for testing agents, running local repair scripts, or developing your own AI tools.
+
+```bash
+# Run a local agent script in a verify-and-fix loop
+veri local "Fix the bug" --worker "./agent.py fix"
+
+# Run an interactive shell command
+veri local "Refactor code" --worker "python refactor.py" --max-iterations 5
+```
+
+**How it works:**
+1. Veridical executes your worker command.
+2. It runs your configured quality gates (tests, linters).
+3. If gates fail, it feeds the error context back to the worker via the `VERIDICAL_ERROR_CONTEXT` environment variable.
+4. It repeats until the gates pass or max iterations is reached.
+
+**Configuration:**
+```yaml
+local:
+  worker_command: "./my-agent.py"
+  worker_timeout: 600
+  mode: subprocess  # or "interactive"
+  error_env_var: AGENT_ERROR_CONTEXT
+```
+
 #### Session Resumption
 
 The `--session-id` / `-s` option allows you to resume an existing Jules session instead of creating a new one. This is useful when:
