@@ -19,6 +19,7 @@ from veridical.supervisor.circuit_breaker import CircuitBreaker
 from veridical.supervisor.state import LoopState, SupervisorState
 from veridical.synchronizer.patch import Synchronizer
 from veridical.verifier.quality_gate import Verifier
+from veridical.worklog import WorkLogEntry, WorkLogWriter
 
 if TYPE_CHECKING:
     from veridical.config.schema import VeridicalConfig
@@ -61,6 +62,8 @@ class Supervisor:
         self.verbose = verbose
         self.console = console or Console()
         self._current_loop_state: LoopState | None = None
+        self._current_work_log_entry: WorkLogEntry | None = None
+        self._iteration_start_time: datetime | None = None
 
         self._state = SupervisorState.IDLE
         self._circuit_breaker = CircuitBreaker(
@@ -75,6 +78,14 @@ class Supervisor:
         self.poller = Poller(config, client, progress=self.progress)
         self.synchronizer = Synchronizer(config, repo_path, console=self.console)
         self.verifier = Verifier(config, repo_path)
+
+        # Initialize work log writer if enabled
+        self.worklog_writer: WorkLogWriter | None = None
+        if config.worklog.enabled:
+            self.worklog_writer = WorkLogWriter(
+                project_path=repo_path,
+                log_dir=config.worklog.directory,
+            )
 
     @property
     def state(self) -> SupervisorState:
@@ -196,6 +207,17 @@ class Supervisor:
                 logger.info(f"--- Starting Iteration {iteration} ---")
                 self.progress.set_iterations(iteration, self.config.supervisor.max_iterations)
 
+                # Start work log entry for this iteration
+                self._iteration_start_time = datetime.now()
+                if self.worklog_writer and current_session_id:
+                    self._current_work_log_entry = WorkLogEntry(
+                        timestamp=self._iteration_start_time,
+                        iteration=iteration,
+                        session_id=current_session_id,
+                        task_description=task_description,
+                        error_context=error_context,
+                    )
+
                 # 1. DISPATCHING or SENDING FEEDBACK
                 if current_session_id and iteration == 1 and (session_id or resume_from_state):
                     # Resume existing session - skip dispatching
@@ -215,9 +237,17 @@ class Supervisor:
                     self.progress.set_state("Creating session...")
                     prompt = self.dispatcher.build_prompt(task_description, error_context)
 
+                    # Log the prompt sent
+                    if self._current_work_log_entry:
+                        self._current_work_log_entry.prompt_sent = prompt
+
                     # Create session (auto-detect source)
                     session = await self.dispatcher.create_session(prompt, title=task_description)
                     current_session_id = session.session_id
+
+                    # Update work log entry with session ID
+                    if self._current_work_log_entry:
+                        self._current_work_log_entry.session_id = current_session_id
 
                     # Save state immediately after creating session
                     self._update_state(
@@ -385,6 +415,12 @@ class Supervisor:
                     commit_hash = self.synchronizer.merge_to_main(iter_branch, task_description)
                     self._circuit_breaker.record_success()
 
+                    # Log successful iteration
+                    self._log_iteration_end(
+                        session_status="completed",
+                        verification_passed=True,
+                    )
+
                     # Cleanup state file on success
                     if state_file.exists():
                         state_file.unlink()
@@ -400,6 +436,13 @@ class Supervisor:
                 self._circuit_breaker.record_failure()
                 self.progress.set_state("Compiling feedback...")
                 error_context = await self.verifier.generate_feedback(verification_result)
+
+                # Log failed iteration
+                self._log_iteration_end(
+                    session_status="completed",
+                    verification_passed=False,
+                    verification_errors=error_context,
+                )
 
                 # Cleanup failed branch to keep repo clean?
                 # Or keep it for inspection?
@@ -435,9 +478,50 @@ class Supervisor:
             started_at_timestamp=started_at.timestamp(),
         )
 
+    def _log_iteration_end(
+        self,
+        session_status: str,
+        verification_passed: bool | None = None,
+        verification_errors: str | None = None,
+    ) -> None:
+        """Log the end of an iteration to the work log.
+
+        Args:
+            session_status: Status of the Jules session
+            verification_passed: Whether verification passed
+            verification_errors: Error summary if verification failed
+        """
+        if not self.worklog_writer or not self._current_work_log_entry:
+            return
+
+        # Calculate duration
+        duration = None
+        if self._iteration_start_time:
+            duration = (datetime.now() - self._iteration_start_time).total_seconds()
+
+        # Update entry with results
+        self._current_work_log_entry.session_status = session_status
+        self._current_work_log_entry.verification_passed = verification_passed
+        self._current_work_log_entry.verification_errors = verification_errors
+        self._current_work_log_entry.duration_seconds = duration
+
+        # Write to log
+        try:
+            self.worklog_writer.write(self._current_work_log_entry)
+            logger.debug(
+                f"Work log entry written for iteration {self._current_work_log_entry.iteration}"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to write work log entry: {e}")
+
     def _handle_shutdown(self, signum: int, state_file: Path) -> None:
         """Handle shutdown signals."""
         logger.info(f"Received signal {signum}. Saving state...")
+
+        # Log interrupted iteration
+        if self._current_work_log_entry:
+            self._log_iteration_end(session_status="interrupted")
+
         if self._current_loop_state:
             try:
                 self._current_loop_state.save(state_file)

@@ -306,6 +306,19 @@ class GitConfig(BaseModel):
     )
 
 
+class WorkLogConfig(BaseModel):
+    """Configuration for work log persistence."""
+
+    enabled: bool = Field(
+        True,
+        description="Enable work log persistence",
+    )
+    directory: str = Field(
+        "worklog",
+        description="Directory name for work logs relative to project root",
+    )
+
+
 class VeridicalConfig(BaseSettings):
     """Root configuration for Veridical.
 
@@ -327,6 +340,7 @@ class VeridicalConfig(BaseSettings):
     supervisor: SupervisorConfig = Field(default_factory=SupervisorConfig)
     verifier: VerifierConfig = Field(default_factory=VerifierConfig)
     git: GitConfig = Field(default_factory=GitConfig)
+    worklog: WorkLogConfig = Field(default_factory=WorkLogConfig)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         "INFO",
         description="Default logging level",

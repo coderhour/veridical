@@ -70,6 +70,10 @@ git:
   auto_cleanup: true
   auto_create_work_branch: true
 
+worklog:
+  enabled: true       # Enable work log persistence (default: true)
+  directory: worklog  # Directory for work logs (default: "worklog")
+
 log_level: info
 """
 
@@ -112,6 +116,10 @@ git:
   branch_prefix: veridical/iter-
   auto_cleanup: true
   auto_create_work_branch: true
+
+worklog:
+  enabled: true       # Enable work log persistence (default: true)
+  directory: worklog  # Directory for work logs (default: "worklog")
 
 log_level: info
 """
@@ -159,6 +167,10 @@ git:
   branch_prefix: veridical/iter-
   auto_cleanup: true
   auto_create_work_branch: true
+
+worklog:
+  enabled: true       # Enable work log persistence (default: true)
+  directory: worklog  # Directory for work logs (default: "worklog")
 
 log_level: info
 """
@@ -209,6 +221,10 @@ git:
   auto_cleanup: true
   auto_create_work_branch: true
 
+worklog:
+  enabled: true       # Enable work log persistence (default: true)
+  directory: worklog  # Directory for work logs (default: "worklog")
+
 log_level: info
 """
 
@@ -256,6 +272,10 @@ git:
   auto_cleanup: true
   auto_create_work_branch: true
 
+worklog:
+  enabled: true       # Enable work log persistence (default: true)
+  directory: worklog  # Directory for work logs (default: "worklog")
+
 log_level: info
 """
 
@@ -298,6 +318,10 @@ git:
   branch_prefix: veridical/iter-
   auto_cleanup: true
   auto_create_work_branch: true
+
+worklog:
+  enabled: true       # Enable work log persistence (default: true)
+  directory: worklog  # Directory for work logs (default: "worklog")
 
 log_level: info
 """
@@ -346,6 +370,10 @@ git:
   auto_cleanup: true
   auto_create_work_branch: true
 
+worklog:
+  enabled: true       # Enable work log persistence (default: true)
+  directory: worklog  # Directory for work logs (default: "worklog")
+
 log_level: info
 """
 
@@ -384,6 +412,10 @@ git:
   branch_prefix: veridical/iter-
   auto_cleanup: true
   auto_create_work_branch: true
+
+worklog:
+  enabled: true       # Enable work log persistence (default: true)
+  directory: worklog  # Directory for work logs (default: "worklog")
 
 log_level: info
 """
@@ -428,6 +460,10 @@ git:
   auto_cleanup: true
   auto_create_work_branch: true
 
+worklog:
+  enabled: true       # Enable work log persistence (default: true)
+  directory: worklog  # Directory for work logs (default: "worklog")
+
 log_level: info
 """
 
@@ -470,6 +506,10 @@ git:
   branch_prefix: veridical/iter-
   auto_cleanup: true
   auto_create_work_branch: true
+
+worklog:
+  enabled: true       # Enable work log persistence (default: true)
+  directory: worklog  # Directory for work logs (default: "worklog")
 
 log_level: info
 """

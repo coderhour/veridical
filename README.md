@@ -325,6 +325,52 @@ Set your Jules API key:
 export JULES_API_KEY="your-api-key-here"
 ```
 
+### Work Log
+
+Veridical automatically records detailed logs of each iteration to help you audit and debug autonomous runs. Work logs are organized by date and stored in the `worklog/` directory (alongside `.veridical.yaml`).
+
+**What's logged:**
+- **Inputs**: Task description, error context from previous iteration, prompt sent to Jules
+- **Outputs**: Session status, verification results, error summaries, iteration duration
+- **Metadata**: Timestamp, iteration number, session ID
+
+**Log format:**
+```
+worklog/
+└── YYYY-MM-DD/
+    └── iterations.jsonl  # One JSON object per line
+```
+
+**Example entry:**
+```json
+{
+  "timestamp": "2026-02-06T15:30:00",
+  "iteration": 1,
+  "session_id": "session-abc-123",
+  "task_description": "Implement user authentication",
+  "error_context": null,
+  "prompt_sent": "Implement JWT-based authentication",
+  "session_status": "completed",
+  "verification_passed": true,
+  "verification_errors": null,
+  "duration_seconds": 180.5
+}
+```
+
+**Configuration:**
+```yaml
+worklog:
+  enabled: true           # Enable/disable work log (default: true)
+  directory: worklog      # Directory name (default: "worklog")
+```
+
+**Disable work logs:**
+```yaml
+worklog:
+  enabled: false
+```
+
+
 ## Development Workflow (OpenSpec)
 
 Veridical uses **OpenSpec** for spec-driven development. This ensures that every significant change is well-defined, documented, and traceable.
