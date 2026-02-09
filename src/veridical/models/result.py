@@ -32,7 +32,7 @@ class LoopResult(BaseModel):
         cls,
         iterations: int,
         started_at: datetime,
-        final_commit: str,
+        final_commit: str | None,
         target_branch: str | None = None,
     ) -> "LoopResult":
         """Create a successful result."""
