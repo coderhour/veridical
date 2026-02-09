@@ -108,7 +108,7 @@ class PatchApplier:
 
             try:
                 subprocess.run(
-                    ["git", "apply", str(patch_file)],
+                    ["git", "apply", "--3way", "--whitespace=fix", str(patch_file)],
                     cwd=self.repo_path,
                     check=True,
                     capture_output=True,
