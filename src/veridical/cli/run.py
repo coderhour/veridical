@@ -61,56 +61,75 @@ def run_supervisor(
                 raise typer.Exit(code=1)
 
         async def _run() -> None:
-            async with JulesClient(
-                api_key=api_key,
-                base_url=config.jules.api_base_url,
-                timeout=config.jules.poll_timeout,
-            ) as client:
-                # Initialize Supervisor
-                supervisor = Supervisor(config, client, Path.cwd(), verbose=verbose)
+            backend = config.worker.backend
 
-                if session_id:
-                    logger.info(f"Resuming session {session_id} for task: {task}")
-                else:
-                    logger.info(f"Starting supervisor loop for task: {task}")
+            if backend == "jules":
+                async with JulesClient(
+                    api_key=api_key,
+                    base_url=config.jules.api_base_url,
+                    timeout=config.jules.poll_timeout,
+                ) as client:
+                    from veridical.worker.registry import WorkerRegistry
 
-                # Run loop
-                result = await supervisor.run(
-                    task,
-                    session_id=session_id,
-                    tasks_file=tasks_file,
-                    target_branch=target_branch,
-                    resume_from_state=resume_from_state,
+                    worker = WorkerRegistry.create_worker(
+                        config,
+                        client=client,
+                        repo_path=Path.cwd(),
+                        console=console,
+                    )
+
+                    # Initialize Supervisor
+                    supervisor = Supervisor(
+                        config, worker, Path.cwd(), verbose=verbose, console=console
+                    )
+
+                    if session_id:
+                        logger.info(f"Resuming session {session_id} for task: {task}")
+                    else:
+                        logger.info(f"Starting supervisor loop for task: {task}")
+
+                    # Run loop
+                    result = await supervisor.run(
+                        task,
+                        session_id=session_id,
+                        tasks_file=tasks_file,
+                        target_branch=target_branch,
+                        resume_from_state=resume_from_state,
+                    )
+            else:
+                console.print(
+                    f"[bold red]Error:[/bold red] Backend '{backend}' not supported yet."
                 )
+                raise typer.Exit(code=1)
 
-                # Report results
-                style = "green" if result.success else "red"
-                title = "SUCCESS" if result.success else "FAILED"
+            # Report results
+            style = "green" if result.success else "red"
+            title = "SUCCESS" if result.success else "FAILED"
 
-                content = f"""
+            content = f"""
 [bold]Iterations:[/bold] {result.iterations}
 [bold]Duration:[/bold] {result.duration_seconds:.2f}s
 [bold]Started:[/bold] {result.started_at.isoformat()}
 [bold]Completed:[/bold] {result.completed_at.isoformat()}
 """
-                if result.final_commit:
-                    content += f"[bold]Final Commit:[/bold] {result.final_commit}\n"
+            if result.final_commit:
+                content += f"[bold]Final Commit:[/bold] {result.final_commit}\n"
 
-                if result.target_branch:
-                    content += f"[bold]Target Branch:[/bold] {result.target_branch}\n"
+            if result.target_branch:
+                content += f"[bold]Target Branch:[/bold] {result.target_branch}\n"
 
-                if result.failure_reason:
-                    content += f"\n[bold]Failure Reason:[/bold] {result.failure_reason}"
+            if result.failure_reason:
+                content += f"\n[bold]Failure Reason:[/bold] {result.failure_reason}"
 
-                if result.error_context:
-                    content += f"\n[bold]Error Context:[/bold]\n{result.error_context}"
+            if result.error_context:
+                content += f"\n[bold]Error Context:[/bold]\n{result.error_context}"
 
-                console.print(
-                    Panel(content, title=f"[{style}]{title}[/{style}]", border_style=style)
-                )
+            console.print(
+                Panel(content, title=f"[{style}]{title}[/{style}]", border_style=style)
+            )
 
-                if not result.success:
-                    raise typer.Exit(code=1)
+            if not result.success:
+                raise typer.Exit(code=1)
 
         if dry_run:
             console.print(
