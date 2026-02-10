@@ -14,6 +14,7 @@ from rich.table import Table
 from veridical.cli.spec_selector import select_spec
 from veridical.config.loader import load_config
 from veridical.exceptions import VeridicalError
+from veridical.local.gtr import GTR_INSTALL_URL, detect_gtr, generate_gtr_branch_name
 from veridical.local.providers.registry import LocalProviderRegistry
 from veridical.local.supervisor import LocalSupervisor
 from veridical.logging_config import setup_logging
@@ -109,6 +110,7 @@ def run_local_supervisor(
     verbose: bool,
     tasks_file: Path | None = None,
     provider_name: str | None = None,
+    gtr_branch: str | None = None,
 ) -> None:
     """Async wrapper for running the local supervisor."""
     try:
@@ -134,7 +136,12 @@ def run_local_supervisor(
         async def _run() -> None:
             # Initialize Supervisor
             supervisor = LocalSupervisor(
-                config, Path.cwd(), verbose=verbose, console=console, provider=provider
+                config,
+                Path.cwd(),
+                verbose=verbose,
+                console=console,
+                provider=provider,
+                gtr_branch=gtr_branch,
             )
 
             logger.info(f"Starting local supervisor loop for task: {task}")
@@ -258,6 +265,13 @@ def local_mode(
             help="Path to tasks.md file for verification",
         ),
     ] = None,
+    gtr: Annotated[
+        bool,
+        typer.Option(
+            "--gtr",
+            help="Enable gtr (Git Worktree Runner) for isolated parallel worktrees",
+        ),
+    ] = False,
 ) -> None:
     """Run a local verify-and-fix loop.
 
@@ -283,10 +297,13 @@ def local_mode(
     if max_iterations:
         console.print(f"[dim]Max iterations: {max_iterations}[/dim]")
 
+    # Resolve gtr enablement: CLI flag OR config
+    gtr_enabled = gtr  # Will be combined with config after load
+
     # Spec detection and selection (mirrors veri run behavior)
+    matched_spec = None
     if not no_spec and not tasks_file:
         open_specs = find_open_specs()
-        matched_spec = None
 
         if task:
             matched_spec = match_spec_from_description(task, open_specs)
@@ -308,6 +325,20 @@ def local_mode(
             console.print("[bold red]Error:[/bold red] No task description provided.")
             raise typer.Exit(code=1)
 
+    # Resolve gtr branch name if gtr is enabled
+    gtr_branch: str | None = None
+    if gtr_enabled:
+        if not detect_gtr():
+            console.print(
+                f"[bold red]Error:[/bold red] gtr (Git Worktree Runner) is not installed.\n"
+                f"Install it from: {GTR_INSTALL_URL}"
+            )
+            raise typer.Exit(code=1)
+
+        spec_name = matched_spec.name if matched_spec else None
+        gtr_branch = generate_gtr_branch_name(spec_name, task)
+        console.print(f"[dim]gtr worktree branch: {gtr_branch}[/dim]")
+
     run_local_supervisor(
         task,
         worker_command,
@@ -317,4 +348,5 @@ def local_mode(
         verbose,
         tasks_file=tasks_file,
         provider_name=provider,
+        gtr_branch=gtr_branch,
     )

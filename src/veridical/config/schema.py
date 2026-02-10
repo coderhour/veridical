@@ -215,6 +215,16 @@ class LocalConfig(BaseModel):
         "VERIDICAL_ERROR_CONTEXT",
         description="Environment variable to pass error context to the worker",
     )
+    gtr_enabled: bool = Field(
+        False,
+        description="Enable gtr (Git Worktree Runner) for isolated parallel worktrees. "
+        "When true, each `veri local` run creates a separate worktree.",
+    )
+    gtr_auto_cleanup: bool = Field(
+        True,
+        description="Automatically remove the gtr worktree after a successful merge. "
+        "On failure or merge conflict the worktree is always preserved.",
+    )
 
 
 class LocalLLMConfig(BaseModel):

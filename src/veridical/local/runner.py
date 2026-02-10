@@ -23,6 +23,7 @@ class LocalRunner:
         config: "LocalConfig",
         console: Console,
         provider: "LocalProvider | None" = None,
+        worktree_branch: str | None = None,
     ) -> None:
         """Initialize the local runner.
 
@@ -30,10 +31,13 @@ class LocalRunner:
             config: Local configuration
             console: Rich console instance
             provider: Optional local provider for command construction
+            worktree_branch: Optional gtr worktree branch name. When set,
+                commands are wrapped with ``git gtr run <branch>``.
         """
         self.config = config
         self.console = console
         self.provider = provider
+        self.worktree_branch = worktree_branch
 
     async def run(
         self,
@@ -66,6 +70,10 @@ class LocalRunner:
         if not command:
             self.console.print("[bold red]Error:[/bold red] No worker command specified.")
             return 1
+
+        # Wrap command with gtr run if worktree branch is set
+        if self.worktree_branch:
+            command = f"git gtr run {self.worktree_branch} {command}"
 
         env = os.environ.copy()
         # Always pass error context via env var (providers may also embed it in the command)

@@ -1,5 +1,6 @@
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from rich.console import Console
@@ -109,3 +110,177 @@ async def test_supervisor_max_iterations(config, console, repo_path):
     assert result.success is False
     assert result.iterations == 2
     assert result.failure_reason == "Maximum iterations exceeded"
+
+
+# ---------------------------------------------------------------------------
+# gtr worktree integration tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_supervisor_with_gtr_creates_worktree(config, console, repo_path):
+    """When gtr_branch is set, supervisor creates a worktree before the loop."""
+    with patch("veridical.local.supervisor.GtrWorktreeManager") as MockManager:
+        mock_mgr = MagicMock()
+        mock_mgr.create_worktree.return_value = Path("/tmp/worktree")
+        mock_mgr.merge_worktree_branch.return_value = True
+        mock_mgr.remove_worktree.return_value = None
+        MockManager.return_value = mock_mgr
+
+        supervisor = LocalSupervisor(
+            config, repo_path, console=console, gtr_branch="veri/my-feature"
+        )
+        supervisor.runner.run = AsyncMock(return_value=0)
+        supervisor.verifier.run_all = AsyncMock(
+            return_value=VerificationResult(
+                passed=True, gates=[], duration_seconds=1.0, timestamp=datetime.now()
+            )
+        )
+
+        with patch.object(supervisor, "_get_starting_branch", return_value="main"):
+            result = await supervisor.run("Fix bug")
+
+        assert result.success is True
+        mock_mgr.create_worktree.assert_called_once_with("veri/my-feature")
+
+
+@pytest.mark.asyncio
+async def test_supervisor_with_gtr_merges_on_success(config, console, repo_path):
+    """On success, supervisor merges worktree branch and cleans up."""
+    with patch("veridical.local.supervisor.GtrWorktreeManager") as MockManager:
+        mock_mgr = MagicMock()
+        mock_mgr.create_worktree.return_value = Path("/tmp/worktree")
+        mock_mgr.merge_worktree_branch.return_value = True
+        mock_mgr.remove_worktree.return_value = None
+        MockManager.return_value = mock_mgr
+
+        supervisor = LocalSupervisor(
+            config, repo_path, console=console, gtr_branch="veri/my-feature"
+        )
+        supervisor.runner.run = AsyncMock(return_value=0)
+        supervisor.verifier.run_all = AsyncMock(
+            return_value=VerificationResult(
+                passed=True, gates=[], duration_seconds=1.0, timestamp=datetime.now()
+            )
+        )
+
+        with patch.object(supervisor, "_get_starting_branch", return_value="main"):
+            result = await supervisor.run("Fix bug")
+
+        assert result.success is True
+        mock_mgr.merge_worktree_branch.assert_called_once_with("veri/my-feature", "main")
+        mock_mgr.remove_worktree.assert_called_once_with("veri/my-feature")
+
+
+@pytest.mark.asyncio
+async def test_supervisor_with_gtr_no_cleanup_when_disabled(config, console, repo_path):
+    """When gtr_auto_cleanup is false, worktree is kept after merge."""
+    config.local.gtr_auto_cleanup = False
+
+    with patch("veridical.local.supervisor.GtrWorktreeManager") as MockManager:
+        mock_mgr = MagicMock()
+        mock_mgr.create_worktree.return_value = Path("/tmp/worktree")
+        mock_mgr.merge_worktree_branch.return_value = True
+        MockManager.return_value = mock_mgr
+
+        supervisor = LocalSupervisor(
+            config, repo_path, console=console, gtr_branch="veri/my-feature"
+        )
+        supervisor.runner.run = AsyncMock(return_value=0)
+        supervisor.verifier.run_all = AsyncMock(
+            return_value=VerificationResult(
+                passed=True, gates=[], duration_seconds=1.0, timestamp=datetime.now()
+            )
+        )
+
+        with patch.object(supervisor, "_get_starting_branch", return_value="main"):
+            result = await supervisor.run("Fix bug")
+
+        assert result.success is True
+        mock_mgr.merge_worktree_branch.assert_called_once()
+        mock_mgr.remove_worktree.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_supervisor_with_gtr_merge_conflict(config, console, repo_path):
+    """On merge conflict, worktree is preserved and user is instructed."""
+    with patch("veridical.local.supervisor.GtrWorktreeManager") as MockManager:
+        mock_mgr = MagicMock()
+        mock_mgr.create_worktree.return_value = Path("/tmp/worktree")
+        mock_mgr.merge_worktree_branch.return_value = False  # conflict
+        MockManager.return_value = mock_mgr
+
+        supervisor = LocalSupervisor(
+            config, repo_path, console=console, gtr_branch="veri/my-feature"
+        )
+        supervisor.runner.run = AsyncMock(return_value=0)
+        supervisor.verifier.run_all = AsyncMock(
+            return_value=VerificationResult(
+                passed=True, gates=[], duration_seconds=1.0, timestamp=datetime.now()
+            )
+        )
+
+        with patch.object(supervisor, "_get_starting_branch", return_value="main"):
+            result = await supervisor.run("Fix bug")
+
+        assert result.success is True
+        mock_mgr.remove_worktree.assert_not_called()
+        # Check that merge conflict message was printed
+        printed = " ".join(str(c) for c in console.print.call_args_list)
+        assert "Merge conflict" in printed or "merge" in printed.lower()
+
+
+@pytest.mark.asyncio
+async def test_supervisor_with_gtr_failure_preserves_worktree(config, console, repo_path):
+    """On loop failure, worktree is preserved for inspection."""
+    config.supervisor.max_iterations = 1
+
+    fail_result = VerificationResult(
+        passed=False, gates=[], duration_seconds=1.0, timestamp=datetime.now()
+    )
+
+    with (
+        patch("veridical.local.supervisor.GtrWorktreeManager") as MockManager,
+        patch("veridical.local.supervisor.Verifier") as MockVerifier,
+    ):
+        mock_mgr = MagicMock()
+        mock_mgr.create_worktree.return_value = Path("/tmp/worktree")
+        MockManager.return_value = mock_mgr
+
+        mock_verifier = MagicMock()
+        mock_verifier.run_all = AsyncMock(return_value=fail_result)
+        mock_verifier.generate_feedback = AsyncMock(return_value="Error")
+        MockVerifier.return_value = mock_verifier
+
+        supervisor = LocalSupervisor(
+            config, repo_path, console=console, gtr_branch="veri/my-feature"
+        )
+        supervisor.runner.run = AsyncMock(return_value=0)
+
+        result = await supervisor.run("Fix bug")
+
+        assert result.success is False
+        mock_mgr.merge_worktree_branch.assert_not_called()
+        mock_mgr.remove_worktree.assert_not_called()
+        # Check preserved message
+        printed = " ".join(str(c) for c in console.print.call_args_list)
+        assert "preserved" in printed.lower() or "worktree" in printed.lower()
+
+
+@pytest.mark.asyncio
+async def test_supervisor_without_gtr_unchanged(config, console, repo_path):
+    """Without gtr_branch, supervisor behaves exactly as before."""
+    supervisor = LocalSupervisor(config, repo_path, console=console)
+
+    assert supervisor.gtr_branch is None
+    assert supervisor._gtr_manager is None
+
+    supervisor.runner.run = AsyncMock(return_value=0)
+    supervisor.verifier.run_all = AsyncMock(
+        return_value=VerificationResult(
+            passed=True, gates=[], duration_seconds=1.0, timestamp=datetime.now()
+        )
+    )
+
+    result = await supervisor.run("Fix bug")
+    assert result.success is True

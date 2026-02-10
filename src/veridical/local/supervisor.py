@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 
+from veridical.local.gtr import GtrWorktreeManager
 from veridical.local.runner import LocalRunner
 from veridical.models.result import LoopResult
 from veridical.supervisor.circuit_breaker import CircuitBreaker
@@ -32,6 +33,7 @@ class LocalSupervisor:
         verbose: bool = False,
         console: Console | None = None,
         provider: "LocalProvider | None" = None,
+        gtr_branch: str | None = None,
     ) -> None:
         """Initialize the local supervisor.
 
@@ -41,11 +43,16 @@ class LocalSupervisor:
             verbose: Enable verbose output
             console: Rich console instance
             provider: Optional local provider for command construction
+            gtr_branch: Optional gtr worktree branch name. When set,
+                a worktree is created before the loop and commands run inside it.
         """
         self.config = config
         self.repo_path = repo_path
         self.verbose = verbose
         self.console = console or Console()
+        self.gtr_branch = gtr_branch
+        self._gtr_manager: GtrWorktreeManager | None = None
+        self._gtr_worktree_path: Path | None = None
 
         self._state = SupervisorState.IDLE
         self._circuit_breaker = CircuitBreaker(
@@ -56,7 +63,9 @@ class LocalSupervisor:
         )
 
         # Initialize components
-        self.runner = LocalRunner(config.local, self.console, provider=provider)
+        self.runner = LocalRunner(
+            config.local, self.console, provider=provider, worktree_branch=gtr_branch
+        )
         self.verifier = Verifier(config, repo_path)
 
         # Initialize work log writer if enabled
@@ -81,6 +90,23 @@ class LocalSupervisor:
         Returns:
             Result of the loop execution
         """
+        # Set up gtr worktree if enabled
+        if self.gtr_branch:
+            self._gtr_manager = GtrWorktreeManager(self.repo_path)
+            try:
+                self._gtr_worktree_path = self._gtr_manager.create_worktree(self.gtr_branch)
+                self.console.print(f"[dim]Created gtr worktree: {self._gtr_worktree_path}[/dim]")
+                # Update verifier to run inside the worktree
+                self.verifier = Verifier(self.config, self._gtr_worktree_path)
+            except RuntimeError as e:
+                self.console.print(f"[bold red]gtr worktree creation failed:[/bold red] {e}")
+                return LoopResult.failure_result(
+                    iterations=0,
+                    started_at=datetime.now(),
+                    failure_reason="gtr worktree creation failed",
+                    error_context=str(e),
+                )
+
         if tasks_file:
             self.verifier.current_tasks_file = tasks_file
 
@@ -136,6 +162,10 @@ class LocalSupervisor:
                     self._write_log(log_entry)
 
                 self.console.print("[bold green]Verification passed! Task completed.[/bold green]")
+
+                # gtr: merge and optionally clean up
+                self._gtr_merge_and_cleanup()
+
                 return LoopResult(
                     success=True,
                     iterations=iteration,
@@ -169,12 +199,82 @@ class LocalSupervisor:
         if self._circuit_breaker.open_reason == "Maximum iterations exceeded":
             iterations -= 1
 
+        # On failure, keep worktree intact for inspection
+        self._gtr_report_preserved()
+
         return LoopResult.failure_result(
             iterations=iterations,
             started_at=started_at,
             failure_reason=self._circuit_breaker.open_reason or "Max iterations reached",
             error_context=error_context,
         )
+
+    # ------------------------------------------------------------------
+    # gtr helpers
+    # ------------------------------------------------------------------
+
+    def _gtr_merge_and_cleanup(self) -> None:
+        """Merge the gtr worktree branch back and optionally clean up."""
+        if not self.gtr_branch or not self._gtr_manager:
+            return
+
+        # Determine the branch to merge into (the branch the user was on)
+        starting_branch = self._get_starting_branch()
+
+        merged = self._gtr_manager.merge_worktree_branch(self.gtr_branch, starting_branch)
+        if merged:
+            self.console.print(
+                f"[bold green]Merged {self.gtr_branch} into {starting_branch}[/bold green]"
+            )
+            if self.config.local.gtr_auto_cleanup:
+                try:
+                    self._gtr_manager.remove_worktree(self.gtr_branch)
+                    self.console.print("[dim]Worktree cleaned up.[/dim]")
+                except RuntimeError as e:
+                    logger.warning(f"Failed to clean up worktree: {e}")
+                    self.console.print(f"[yellow]Warning: worktree cleanup failed: {e}[/yellow]")
+            else:
+                self.console.print(
+                    f"[dim]Worktree preserved (gtr_auto_cleanup=false): "
+                    f"{self._gtr_worktree_path}[/dim]"
+                )
+        else:
+            self.console.print(
+                f"[yellow]Merge conflict: could not auto-merge {self.gtr_branch} "
+                f"into {starting_branch}.[/yellow]"
+            )
+            self.console.print(
+                f"[yellow]Your work is safe on branch {self.gtr_branch}.[/yellow]\n"
+                f"[yellow]Worktree path: {self._gtr_worktree_path}[/yellow]\n"
+                f"[yellow]To merge manually:[/yellow]\n"
+                f"  git checkout {starting_branch}\n"
+                f"  git merge {self.gtr_branch}"
+            )
+
+    def _gtr_report_preserved(self) -> None:
+        """Report that the gtr worktree is preserved for inspection."""
+        if not self.gtr_branch or not self._gtr_worktree_path:
+            return
+        self.console.print(
+            f"[dim]Worktree preserved for inspection: {self._gtr_worktree_path} "
+            f"(branch: {self.gtr_branch})[/dim]"
+        )
+
+    def _get_starting_branch(self) -> str:
+        """Detect the current branch in the main repo."""
+        import subprocess
+
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=self.repo_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        branch = result.stdout.strip()
+        if not branch or branch == "HEAD":
+            return self.config.git.base_branch
+        return branch
 
     def _write_log(self, entry: WorkLogEntry) -> None:
         """Write entry to work log."""

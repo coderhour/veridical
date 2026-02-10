@@ -196,6 +196,17 @@ report:
   # Environment variable to pass error context to the worker
   # error_env_var: VERIDICAL_ERROR_CONTEXT
 
+  # Enable gtr (Git Worktree Runner) for isolated parallel worktrees
+  # When true, each `veri local` run creates a separate worktree on an
+  # auto-generated branch (e.g. veri/add-user-auth).
+  # Requires gtr: https://github.com/coderabbitai/git-worktree-runner
+  # Can also be enabled per-run with `veri local --gtr`
+  # gtr_enabled: false
+
+  # Automatically remove the gtr worktree after a successful merge
+  # On failure or merge conflict the worktree is always preserved
+  # gtr_auto_cleanup: true
+
 # ------------------------------------------------------------------------------
 # Git Configuration
 # ------------------------------------------------------------------------------

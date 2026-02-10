@@ -1,5 +1,7 @@
 """Integration tests for local provider CLI features."""
 
+from unittest.mock import patch
+
 import pytest
 from typer.testing import CliRunner
 
@@ -92,3 +94,50 @@ class TestLocalInteractiveFlow:
         )
         assert result.exit_code == 0
         assert "Dry run" in result.stdout
+
+
+@pytest.mark.integration
+class TestLocalGtrCli:
+    """Integration tests for veri local --gtr option."""
+
+    @patch("veridical.cli.local.detect_gtr", return_value=True)
+    def test_gtr_dry_run_generates_branch(self, _mock_detect: object) -> None:
+        """Test 'local --gtr --dry-run' generates branch name and shows it."""
+        result = runner.invoke(
+            app,
+            ["local", "Fix bug", "--gtr", "--dry-run", "--no-spec", "--provider", "claude-code"],
+        )
+        assert result.exit_code == 0
+        assert "veri/fix-bug" in result.stdout
+        assert "gtr worktree branch" in result.stdout
+        assert "Dry run" in result.stdout
+
+    @patch("veridical.cli.local.detect_gtr", return_value=True)
+    def test_gtr_with_provider_dry_run(self, _mock_detect: object) -> None:
+        """Test 'local --gtr --provider claude-code --dry-run' combines both options."""
+        result = runner.invoke(
+            app,
+            [
+                "local",
+                "Implement auth",
+                "--gtr",
+                "--provider",
+                "claude-code",
+                "--dry-run",
+                "--no-spec",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "veri/implement-auth" in result.stdout
+        assert "Claude Code" in result.stdout
+
+    @patch("veridical.cli.local.detect_gtr", return_value=False)
+    def test_gtr_not_installed_error(self, _mock_detect: object) -> None:
+        """Test '--gtr' when gtr is not installed shows error with install URL."""
+        result = runner.invoke(
+            app,
+            ["local", "Fix bug", "--gtr", "--dry-run", "--no-spec", "--provider", "claude-code"],
+        )
+        assert result.exit_code == 1
+        assert "not installed" in result.stdout
+        assert "github.com/coderabbitai/git-worktree-runner" in result.stdout

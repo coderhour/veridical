@@ -240,6 +240,42 @@ local:
   error_env_var: VERIDICAL_ERROR_CONTEXT
 ```
 
+#### Parallel Development with gtr (Git Worktree Runner)
+
+Veridical integrates with [gtr](https://github.com/coderabbitai/git-worktree-runner) to enable running multiple `veri local` sessions in parallel. Each session gets its own isolated git worktree on an auto-generated branch.
+
+**Prerequisites:** Install gtr separately from https://github.com/coderabbitai/git-worktree-runner
+
+```bash
+# Run with gtr worktree isolation
+veri local "Fix login bug" --gtr --provider claude-code
+
+# Branch name is auto-generated from the task (e.g. veri/fix-login-bug)
+# Or from the spec name if one is selected (e.g. veri/add-user-auth)
+
+# Run multiple sessions in parallel (each in a separate terminal)
+veri local "Fix login bug" --gtr --provider claude-code
+veri local "Add user auth" --gtr --provider claude-code
+```
+
+**How it works:**
+1. Creates an isolated git worktree via `git gtr new veri/<branch>`
+2. Runs the worker and verifier inside the worktree
+3. On success: merges the branch back to your starting branch, then cleans up the worktree
+4. On failure: keeps the worktree intact so you can inspect or continue the work
+5. On merge conflict: aborts the merge, keeps the worktree, and shows manual merge instructions
+
+**Configuration:**
+```yaml
+local:
+  # Enable gtr by default (can also use --gtr flag per-run)
+  gtr_enabled: false
+
+  # Auto-remove worktree after successful merge (default: true)
+  # On failure or merge conflict, the worktree is always preserved
+  gtr_auto_cleanup: true
+```
+
 #### Session Resumption
 
 The `--session-id` / `-s` option allows you to resume an existing Jules session instead of creating a new one. This is useful when:

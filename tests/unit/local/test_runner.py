@@ -212,3 +212,83 @@ async def test_run_without_provider_backward_compat(config, console):
         assert exit_code == 0
         args, _ = mock_shell.call_args
         assert args[0] == "echo hello"
+
+
+# ---------------------------------------------------------------------------
+# gtr worktree-wrapped runner tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_with_worktree_branch_wraps_command(config, console):
+    """When worktree_branch is set, command is wrapped with git gtr run."""
+    runner = LocalRunner(config, console, worktree_branch="veri/my-feature")
+
+    with patch("asyncio.create_subprocess_shell", new_callable=MagicMock) as mock_shell:
+        process_mock = MagicMock()
+        process_mock.communicate = MagicMock(
+            side_effect=lambda: asyncio.sleep(0, result=(b"", b""))
+        )
+        process_mock.returncode = 0
+
+        future = asyncio.Future()
+        future.set_result(process_mock)
+        mock_shell.return_value = future
+
+        exit_code = await runner.run()
+
+        assert exit_code == 0
+        args, _ = mock_shell.call_args
+        assert args[0] == "git gtr run veri/my-feature echo hello"
+
+
+@pytest.mark.asyncio
+async def test_run_with_worktree_branch_and_provider(config, console):
+    """gtr wrapping works together with provider command construction."""
+    config.worker_command = ""
+
+    provider = MagicMock()
+    provider.default_mode.return_value = "subprocess"
+    provider.build_command.return_value = "claude --print -p 'Fix it'"
+
+    runner = LocalRunner(config, console, provider=provider, worktree_branch="veri/fix-bug")
+
+    with patch("asyncio.create_subprocess_shell", new_callable=MagicMock) as mock_shell:
+        process_mock = MagicMock()
+        process_mock.communicate = MagicMock(
+            side_effect=lambda: asyncio.sleep(0, result=(b"", b""))
+        )
+        process_mock.returncode = 0
+
+        future = asyncio.Future()
+        future.set_result(process_mock)
+        mock_shell.return_value = future
+
+        exit_code = await runner.run(task="Fix it")
+
+        assert exit_code == 0
+        args, _ = mock_shell.call_args
+        assert args[0] == "git gtr run veri/fix-bug claude --print -p 'Fix it'"
+
+
+@pytest.mark.asyncio
+async def test_run_without_worktree_branch_no_wrapping(config, console):
+    """Without worktree_branch, command is not wrapped."""
+    runner = LocalRunner(config, console, worktree_branch=None)
+
+    with patch("asyncio.create_subprocess_shell", new_callable=MagicMock) as mock_shell:
+        process_mock = MagicMock()
+        process_mock.communicate = MagicMock(
+            side_effect=lambda: asyncio.sleep(0, result=(b"", b""))
+        )
+        process_mock.returncode = 0
+
+        future = asyncio.Future()
+        future.set_result(process_mock)
+        mock_shell.return_value = future
+
+        exit_code = await runner.run()
+
+        assert exit_code == 0
+        args, _ = mock_shell.call_args
+        assert args[0] == "echo hello"
