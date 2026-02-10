@@ -115,6 +115,7 @@ class Verifier:
                             duration_seconds=0.0,
                         )
 
+        timed_out_tasks: set[asyncio.Task] = set()
         try:
             await asyncio.wait_for(orchestrate(), timeout=self.config.verifier.parallel_timeout)
         except TimeoutError:
@@ -123,7 +124,12 @@ class Verifier:
             )
             for task in tasks:
                 if not task.done():
+                    timed_out_tasks.add(task)
                     task.cancel()
+
+        # Ensure all tasks have finished (including cancelled ones) so we don't leak
+        # background work into later tests / event loop shutdown.
+        await asyncio.gather(*tasks, return_exceptions=True)
 
         # Collect final results for all tasks
         final_results: dict[str, GateResult] = {}
@@ -132,13 +138,16 @@ class Verifier:
                 final_results[gate.name] = results[gate.name]
                 continue
 
-            if task.cancelled():
+            if task in timed_out_tasks:
+                status = GateStatus.TIMEOUT
+                output = "Gate execution timed out."
+            elif task.cancelled():
                 status = GateStatus.CANCELLED
                 output = "Cancelled due to failure or timeout in another gate."
             elif task.done() and task.exception():
                 status = GateStatus.FAILED
                 output = f"An unexpected error occurred: {task.exception()}"
-            else:  # Not in results, not cancelled, no exception -> timed out
+            else:
                 status = GateStatus.TIMEOUT
                 output = "Gate execution timed out."
 

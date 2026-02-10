@@ -94,10 +94,9 @@ class TestSupervisorSessionResume:
                     # This shouldn't happen with our mock, but just in case
                     try:
                         import asyncio
+                        import contextlib
 
-                        if asyncio.get_event_loop().is_running():
-                            asyncio.create_task(sup.client._client.aclose())  # noqa: RUF006
-                        else:
+                        with contextlib.suppress(RuntimeError):
                             asyncio.run(sup.client._client.aclose())
                     except Exception:
                         pass  # Ignore cleanup errors
