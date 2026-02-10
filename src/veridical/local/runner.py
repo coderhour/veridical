@@ -10,6 +10,7 @@ from rich.console import Console
 
 if TYPE_CHECKING:
     from veridical.config.schema import LocalConfig
+    from veridical.local.providers.protocol import LocalProvider
 
 logger = logging.getLogger(__name__)
 
@@ -17,31 +18,57 @@ logger = logging.getLogger(__name__)
 class LocalRunner:
     """Executes the worker command locally."""
 
-    def __init__(self, config: "LocalConfig", console: Console) -> None:
+    def __init__(
+        self,
+        config: "LocalConfig",
+        console: Console,
+        provider: "LocalProvider | None" = None,
+    ) -> None:
         """Initialize the local runner.
 
         Args:
             config: Local configuration
             console: Rich console instance
+            provider: Optional local provider for command construction
         """
         self.config = config
         self.console = console
+        self.provider = provider
 
-    async def run(self, error_context: str | None = None) -> int:
+    async def run(
+        self,
+        error_context: str | None = None,
+        task: str | None = None,
+    ) -> int:
         """Execute the worker command.
 
         Args:
             error_context: Optional error context from previous failure
+            task: Optional task description (used by provider for command construction)
 
         Returns:
             Exit code of the command
         """
-        command = self.config.worker_command
+        mode = self.config.mode
+
+        if self.provider:
+            # Use provider's default mode if config doesn't override
+            if not self.config.worker_command:
+                mode = self.provider.default_mode()
+            command = self.provider.build_command(
+                task or "Fix the issues",
+                error_context,
+                mode=mode,
+            )
+        else:
+            command = self.config.worker_command
+
         if not command:
             self.console.print("[bold red]Error:[/bold red] No worker command specified.")
             return 1
 
         env = os.environ.copy()
+        # Always pass error context via env var (providers may also embed it in the command)
         if error_context:
             env[self.config.error_env_var] = error_context
             logger.debug(f"Passing error context via {self.config.error_env_var}")
@@ -50,7 +77,7 @@ class LocalRunner:
         self.console.print(f"[dim]Running worker: {command}[/dim]")
 
         try:
-            if self.config.mode == "interactive":
+            if mode == "interactive":
                 return await self._run_interactive(command, env)
             else:
                 return await self._run_subprocess(command, env)

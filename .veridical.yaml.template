@@ -176,6 +176,27 @@ report:
   #   chunk_size: 500
 
 # ------------------------------------------------------------------------------
+# Local Loop Configuration
+# ------------------------------------------------------------------------------
+# local:
+  # Named provider preset (auto-configures command, mode, and error delivery)
+  # Available providers: claude-code, gemini-cli
+  # Run `veri local --list-providers` to see all providers and detection status
+  # provider: claude-code
+
+  # Or specify a custom worker command directly (overrides provider default)
+  # worker_command: "claude --print --output-format text -p"
+
+  # Execution mode: subprocess (captures output) or interactive (TTY-attached)
+  # mode: subprocess
+
+  # Timeout in seconds for the worker execution
+  # worker_timeout: 600
+
+  # Environment variable to pass error context to the worker
+  # error_env_var: VERIDICAL_ERROR_CONTEXT
+
+# ------------------------------------------------------------------------------
 # Git Configuration
 # ------------------------------------------------------------------------------
 git:

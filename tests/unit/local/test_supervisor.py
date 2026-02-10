@@ -89,7 +89,7 @@ async def test_supervisor_retry_loop(config, console, repo_path):
     assert supervisor.runner.run.call_count == 2
 
     # Check that error context was passed to second run
-    supervisor.runner.run.assert_called_with("Error context")
+    supervisor.runner.run.assert_called_with("Error context", task="Fix bug")
 
 
 @pytest.mark.asyncio

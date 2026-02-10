@@ -197,6 +197,11 @@ class LocalConfig(BaseModel):
         "",
         description="Command to execute as the AI worker",
     )
+    provider: str | None = Field(
+        None,
+        description="Named local provider preset (e.g., 'claude-code', 'gemini-cli'). "
+        "When set, auto-configures command, mode, and error delivery.",
+    )
     worker_timeout: int = Field(
         600,
         ge=1,

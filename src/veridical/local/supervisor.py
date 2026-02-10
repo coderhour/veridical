@@ -16,6 +16,7 @@ from veridical.worklog import WorkLogEntry, WorkLogWriter
 
 if TYPE_CHECKING:
     from veridical.config.schema import VeridicalConfig
+    from veridical.local.providers.protocol import LocalProvider
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class LocalSupervisor:
         *,
         verbose: bool = False,
         console: Console | None = None,
+        provider: "LocalProvider | None" = None,
     ) -> None:
         """Initialize the local supervisor.
 
@@ -38,6 +40,7 @@ class LocalSupervisor:
             repo_path: Path to the repository root
             verbose: Enable verbose output
             console: Rich console instance
+            provider: Optional local provider for command construction
         """
         self.config = config
         self.repo_path = repo_path
@@ -53,7 +56,7 @@ class LocalSupervisor:
         )
 
         # Initialize components
-        self.runner = LocalRunner(config.local, self.console)
+        self.runner = LocalRunner(config.local, self.console, provider=provider)
         self.verifier = Verifier(config, repo_path)
 
         # Initialize work log writer if enabled
@@ -107,7 +110,7 @@ class LocalSupervisor:
 
             # 1. Run Worker
             self._state = SupervisorState.RUNNING
-            exit_code = await self.runner.run(error_context)
+            exit_code = await self.runner.run(error_context, task=task_description)
 
             if exit_code != 0:
                 self.console.print(

@@ -173,6 +173,45 @@ veri run "Fix login bug" -b bugfix/login-correction
 
 Veridical can supervise local agents or scripts, not just Jules. This is useful for testing agents, running local repair scripts, or developing your own AI tools.
 
+#### Built-in Providers
+
+Veridical ships with named provider presets for popular AI coding tools. Providers auto-configure the right CLI flags, error delivery, and execution mode:
+
+```bash
+# Use Claude Code (auto-configures claude CLI flags)
+veri local "Fix the bug" --provider claude-code
+
+# Use Gemini CLI
+veri local "Fix the bug" --provider gemini-cli
+
+# List available providers and detection status
+veri local --list-providers
+```
+
+If no `--provider` or `--worker` is specified, Veridical auto-detects available tools on your PATH and selects or prompts accordingly.
+
+#### Interactive Mode (Zero Arguments)
+
+Just run `veri local` with no arguments for a fully guided experience:
+
+```bash
+# Auto-detects provider, shows spec selection, prompts for task if needed
+veri local
+
+# Skip spec selection
+veri local "Fix the bug" --no-spec
+```
+
+When run without a task argument, Veridical will:
+1. Auto-detect or prompt for a provider
+2. Show an interactive spec selection menu (if open specs exist), with a "None" option
+3. If a spec is selected, auto-generate the task description and track tasks
+4. If no spec is selected or none exist, prompt for a free-text task description
+
+#### Custom Worker Commands
+
+You can also specify any shell command directly:
+
 ```bash
 # Run a local agent script in a verify-and-fix loop
 veri local "Fix the bug" --worker "./agent.py fix"
@@ -182,18 +221,23 @@ veri local "Refactor code" --worker "python refactor.py" --max-iterations 5
 ```
 
 **How it works:**
-1. Veridical executes your worker command.
+1. Veridical executes your worker command (or provider-configured command).
 2. It runs your configured quality gates (tests, linters).
-3. If gates fail, it feeds the error context back to the worker via the `VERIDICAL_ERROR_CONTEXT` environment variable.
+3. If gates fail, it feeds the error context back to the worker (via provider-specific mechanisms or the `VERIDICAL_ERROR_CONTEXT` environment variable).
 4. It repeats until the gates pass or max iterations is reached.
 
 **Configuration:**
 ```yaml
 local:
-  worker_command: "./my-agent.py"
+  # Use a named provider (auto-configures command, mode, error delivery)
+  provider: claude-code  # or gemini-cli
+
+  # Or specify a custom worker command directly
+  # worker_command: "./my-agent.py"
+
   worker_timeout: 600
   mode: subprocess  # or "interactive"
-  error_env_var: AGENT_ERROR_CONTEXT
+  error_env_var: VERIDICAL_ERROR_CONTEXT
 ```
 
 #### Session Resumption
