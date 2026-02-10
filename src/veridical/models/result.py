@@ -64,11 +64,20 @@ class LoopResult(BaseModel):
         )
 
 
+class GateSeverity(str, Enum):
+    """Severity level of a gate result."""
+
+    PASS = "pass"
+    WARN = "warn"
+    FAIL = "fail"
+
+
 class GateStatus(str, Enum):
     """Status of a quality gate execution."""
 
     PASSED = "passed"
     FAILED = "failed"
+    WARNING = "warning"
     SKIPPED = "skipped"
     ERROR = "error"
     TIMEOUT = "timeout"
@@ -84,6 +93,9 @@ class GateResult(BaseModel):
 
     name: str = Field(..., description="Name of the quality gate")
     status: GateStatus = Field(..., description="Status of the gate execution")
+    severity: GateSeverity = Field(
+        GateSeverity.PASS, description="Severity level: pass, warn, or fail"
+    )
     command: str | None = Field(None, description="Command that was executed")
     exit_code: int | None = Field(None, description="Exit code of the command")
     output: str = Field("", description="stdout from the command")
@@ -92,8 +104,8 @@ class GateResult(BaseModel):
 
     @property
     def passed(self) -> bool:
-        """Check if the gate passed."""
-        return self.status == GateStatus.PASSED
+        """Check if the gate passed (pass or warn severity)."""
+        return self.severity != GateSeverity.FAIL
 
 
 class VerificationResult(BaseModel):
@@ -108,6 +120,11 @@ class VerificationResult(BaseModel):
     timestamp: datetime = Field(
         default_factory=datetime.now, description="When verification was run"
     )
+
+    @property
+    def warning_gates(self) -> list[GateResult]:
+        """Get list of gates that produced warnings."""
+        return [g for g in self.gates if g.severity == GateSeverity.WARN]
 
     @property
     def failed_gates(self) -> list[GateResult]:

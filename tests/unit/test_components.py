@@ -7,7 +7,7 @@ import pytest
 from veridical.config.schema import VerifierConfig
 from veridical.dispatcher.agents_md import AgentsMdInjector
 from veridical.dispatcher.prompt import PromptBuilder
-from veridical.models.result import GateResult, GateStatus, VerificationResult
+from veridical.models.result import GateResult, GateSeverity, GateStatus, VerificationResult
 from veridical.poller.backoff import ConstantBackoff, ExponentialBackoff
 from veridical.supervisor.circuit_breaker import CircuitBreaker
 from veridical.supervisor.state import SupervisorState, is_valid_transition
@@ -221,6 +221,7 @@ class TestFeedbackGenerator:
                     name="pytest",
                     command="pytest",
                     status=GateStatus.FAILED,
+                    severity=GateSeverity.FAIL,
                     exit_code=1,
                     output="FAILED test_foo.py::test_bar",
                     error_output="",
@@ -245,6 +246,7 @@ class TestFeedbackGenerator:
                     name="test",
                     command="test",
                     status=GateStatus.FAILED,
+                    severity=GateSeverity.FAIL,
                     exit_code=1,
                     output="x" * 1000,
                     error_output="",

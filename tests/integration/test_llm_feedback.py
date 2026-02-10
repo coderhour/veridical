@@ -4,7 +4,7 @@ import pytest
 
 from veridical.config.schema import LocalLLMConfig, VerifierConfig
 from veridical.lld.client import LocalLLMClient
-from veridical.models.result import GateResult, GateStatus, VerificationResult
+from veridical.models.result import GateResult, GateSeverity, GateStatus, VerificationResult
 from veridical.verifier.feedback import FeedbackGenerator
 
 # Check for environment variables to enable the test
@@ -72,6 +72,7 @@ FAILED test_example.py::test_addition - assert (2 == 3)
         gate_result = GateResult(
             name="pytest",
             status=GateStatus.FAILED,
+            severity=GateSeverity.FAIL,
             output=log_content,
             duration_seconds=1.0,
         )

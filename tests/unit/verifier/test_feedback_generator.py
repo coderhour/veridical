@@ -5,7 +5,7 @@ import pytest
 from veridical.config.schema import LocalLLMConfig, VerifierConfig
 from veridical.exceptions import VerificationError
 from veridical.lld.client import LocalLLMClient
-from veridical.models.result import GateResult, GateStatus, VerificationResult
+from veridical.models.result import GateResult, GateSeverity, GateStatus, VerificationResult
 from veridical.verifier.feedback import FeedbackGenerator
 
 
@@ -16,6 +16,7 @@ def mock_gate_result_factory():
         return GateResult(
             name=name,
             status=GateStatus.FAILED,
+            severity=GateSeverity.FAIL,
             exit_code=1,
             output=output,
             error_output=error_output,

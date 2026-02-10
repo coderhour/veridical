@@ -7,7 +7,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from veridical.lld.client import LocalLLMClient
-from veridical.models.result import GateResult, GateStatus, VerificationResult
+from veridical.models.result import GateResult, GateSeverity, GateStatus, VerificationResult
+from veridical.verifier.assertion import AssertionGateRunner
+from veridical.verifier.composite import CompositeGateRunner
+from veridical.verifier.diff_scope import DiffScopeGateRunner
 from veridical.verifier.feedback import FeedbackGenerator
 from veridical.verifier.runner import CommandRunner
 from veridical.verifier.task_completion import verify_task_completion
@@ -43,7 +46,10 @@ class Verifier:
         self.config = config
         self.repo_path = repo_path
         self.runner = CommandRunner(repo_path)
+        self.assertion_runner = AssertionGateRunner(repo_path)
+        self.diff_scope_runner = DiffScopeGateRunner(repo_path)
         self.current_tasks_file: Path | None = None
+        self.changed_files: list[str] | None = None
 
     def _group_gates(self, gates: list["QualityGate"]) -> list[list["QualityGate"]]:
         """Group gates into sequential and parallel batches.
@@ -111,6 +117,7 @@ class Verifier:
                         results[gate.name] = GateResult(
                             name=gate.name,
                             status=GateStatus.FAILED,
+                            severity=GateSeverity.FAIL,
                             output=str(e),
                             duration_seconds=0.0,
                         )
@@ -157,9 +164,53 @@ class Verifier:
 
         return [final_results[g.name] for g in batch]
 
+    def _should_skip_conditional(self, gate: "QualityGate") -> GateResult | None:
+        """Check if a gate should be skipped due to when_files_changed condition.
+
+        Returns a SKIPPED GateResult if the gate should be skipped, None otherwise.
+        """
+        if not gate.when_files_changed:
+            return None
+
+        changed = self.changed_files or []
+        if not changed:
+            logger.info(f"Skipping gate '{gate.name}': no changed files detected")
+            return GateResult(
+                name=gate.name,
+                status=GateStatus.SKIPPED,
+                severity=GateSeverity.PASS,
+                output=f"Skipped: no changed files matched patterns {gate.when_files_changed}",
+                duration_seconds=0.0,
+            )
+
+        from veridical.verifier.glob_match import glob_match
+
+        matched = any(
+            glob_match(f, pattern) for f in changed for pattern in gate.when_files_changed
+        )
+        if not matched:
+            logger.info(
+                f"Skipping gate '{gate.name}': no changed files matched {gate.when_files_changed}"
+            )
+            return GateResult(
+                name=gate.name,
+                status=GateStatus.SKIPPED,
+                severity=GateSeverity.PASS,
+                output=f"Skipped: no changed files matched patterns {gate.when_files_changed}",
+                duration_seconds=0.0,
+            )
+
+        return None
+
     async def _run_gate_logic(self, gate: "QualityGate") -> GateResult:
         """Run the logic for a single gate based on its type."""
         logger.info(f"Running quality gate: {gate.name} (type: {gate.type})")
+
+        # Check conditional execution
+        skip_result = self._should_skip_conditional(gate)
+        if skip_result is not None:
+            return skip_result
+
         if gate.type == "command":
             return await self.runner.run_gate(gate)
         if gate.type == "task_completion":
@@ -175,6 +226,7 @@ class Verifier:
                     return GateResult(
                         name=gate.name,
                         status=GateStatus.PASSED,
+                        severity=GateSeverity.PASS,
                         output="No OpenSpec change detected to verify tasks.",
                         duration_seconds=0.0,
                     )
@@ -183,6 +235,15 @@ class Verifier:
 
             assert tasks_file_path is not None
             return await asyncio.to_thread(verify_task_completion, gate.name, tasks_file_path)
+        if gate.type == "assertion":
+            return await asyncio.to_thread(self.assertion_runner.run_gate, gate)
+        if gate.type == "diff_scope":
+            return await asyncio.to_thread(
+                self.diff_scope_runner.run_gate, gate, self.changed_files or []
+            )
+        if gate.type == "composite":
+            composite_runner = CompositeGateRunner(self)
+            return await composite_runner.run_gate(gate)
 
         # This should be unreachable due to schema validation
         raise ValueError(f"Unknown quality gate type: {gate.type}")

@@ -7,6 +7,7 @@ import pytest
 from veridical.models.iteration import IterationContext
 from veridical.models.result import (
     GateResult,
+    GateSeverity,
     GateStatus,
     LoopResult,
     PatchResult,
@@ -164,6 +165,7 @@ class TestGateResult:
             name="ruff",
             command="ruff check",
             status=GateStatus.FAILED,
+            severity=GateSeverity.FAIL,
             exit_code=1,
             duration_seconds=5.0,
         )
@@ -191,6 +193,7 @@ class TestVerificationResult:
                     name="ruff",
                     command="ruff check",
                     status=GateStatus.FAILED,
+                    severity=GateSeverity.FAIL,
                     exit_code=1,
                     duration_seconds=5.0,
                 ),

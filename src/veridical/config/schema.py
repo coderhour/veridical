@@ -6,11 +6,27 @@ from pydantic import BaseModel, Field, root_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class AssertionConfig(BaseModel):
+    """Configuration for an assertion check."""
+
+    assert_file_exists: list[str] | None = Field(
+        None, description="Glob patterns for files that must exist"
+    )
+    assert_content_matches: dict[str, str] | None = Field(
+        None,
+        description="Mapping with 'file' and 'pattern' keys for regex content matching",
+    )
+    assert_json_schema: dict[str, str] | None = Field(
+        None,
+        description="Mapping with 'file' and 'schema' keys for JSON/YAML schema validation",
+    )
+
+
 class QualityGate(BaseModel):
     """Configuration for a single quality gate."""
 
     name: str = Field(..., description="Name of the quality gate")
-    type: Literal["command", "task_completion"] = Field(
+    type: Literal["command", "task_completion", "assertion", "diff_scope", "composite"] = Field(
         "command", description="Type of the quality gate"
     )
     command: str | None = Field(None, description="Command to execute for 'command' type gates")
@@ -18,6 +34,32 @@ class QualityGate(BaseModel):
     timeout: int = Field(300, ge=1, description="Timeout in seconds")
     required: bool = Field(True, description="Whether this gate must pass")
     parallel: bool = Field(False, description="Whether this gate can run in parallel with others")
+    warn_only: bool = Field(
+        False, description="If true, gate failure produces a warning instead of blocking the loop"
+    )
+    when_files_changed: list[str] | None = Field(
+        None,
+        description="Glob patterns; gate runs only when matching files were modified in the current diff",
+    )
+    exit_code_map: dict[int, str] | None = Field(
+        None,
+        description="Mapping of exit codes to outcomes: 'pass', 'warn', or 'fail'",
+    )
+    # Assertion gate fields
+    assertions: list[AssertionConfig] | None = Field(
+        None, description="List of assertion checks for 'assertion' type gates"
+    )
+    # Diff scope gate fields
+    allowed_patterns: list[str] | None = Field(
+        None, description="Glob patterns for allowed modified files in 'diff_scope' type gates"
+    )
+    # Composite gate fields
+    mode: Literal["all_of", "any_of"] | None = Field(
+        None, description="Logic mode for 'composite' type gates"
+    )
+    gates: list["QualityGate"] | None = Field(
+        None, description="Sub-gates for 'composite' type gates"
+    )
 
     @root_validator(skip_on_failure=True)
     def check_gate_config(cls, values: dict[str, Any]) -> dict[str, Any]:
@@ -36,6 +78,28 @@ class QualityGate(BaseModel):
                 raise ValueError("`path` is required for 'task_completion' gate type")
             if command is not None:
                 raise ValueError("`command` is not applicable for 'task_completion' gate type")
+        elif gate_type == "assertion":
+            if not values.get("assertions"):
+                raise ValueError("`assertions` is required for 'assertion' gate type")
+        elif gate_type == "diff_scope":
+            if not values.get("allowed_patterns"):
+                raise ValueError("`allowed_patterns` is required for 'diff_scope' gate type")
+        elif gate_type == "composite":
+            if not values.get("mode"):
+                raise ValueError("`mode` is required for 'composite' gate type")
+            if not values.get("gates"):
+                raise ValueError("`gates` is required for 'composite' gate type")
+
+        # Validate exit_code_map values
+        exit_code_map = values.get("exit_code_map")
+        if exit_code_map:
+            valid_outcomes = {"pass", "warn", "fail"}
+            for code, outcome in exit_code_map.items():
+                if outcome not in valid_outcomes:
+                    raise ValueError(
+                        f"Invalid exit_code_map outcome '{outcome}' for code {code}. "
+                        f"Must be one of: {valid_outcomes}"
+                    )
 
         return values
 

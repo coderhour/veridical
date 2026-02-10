@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from veridical.config.schema import QualityGate
-from veridical.models.result import GateResult, GateStatus
+from veridical.models.result import GateResult, GateSeverity, GateStatus
 from veridical.verifier.quality_gate import Verifier
 
 
@@ -79,8 +79,20 @@ async def test_run_parallel_batch_success(verifier):
 
     async def side_effect(gate):
         if gate.name == "p1":
-            return GateResult(name="p1", status=GateStatus.PASSED, output="", duration_seconds=1.0)
-        return GateResult(name="p2", status=GateStatus.PASSED, output="", duration_seconds=1.0)
+            return GateResult(
+                name="p1",
+                status=GateStatus.PASSED,
+                severity=GateSeverity.PASS,
+                output="",
+                duration_seconds=1.0,
+            )
+        return GateResult(
+            name="p2",
+            status=GateStatus.PASSED,
+            severity=GateSeverity.PASS,
+            output="",
+            duration_seconds=1.0,
+        )
 
     verifier._run_gate_logic = AsyncMock(side_effect=side_effect)
     results = await verifier._run_parallel_batch(gates)
@@ -105,12 +117,22 @@ async def test_run_parallel_batch_required_failure(verifier):
             await asyncio.sleep(0.01)  # Fail fast
             completed_gates.append(gate.name)
             return GateResult(
-                name="p1", status=GateStatus.FAILED, output="fail", duration_seconds=0.01
+                name="p1",
+                status=GateStatus.FAILED,
+                severity=GateSeverity.FAIL,
+                output="fail",
+                duration_seconds=0.01,
             )
 
         await asyncio.sleep(0.1)  # Others take longer
         completed_gates.append(gate.name)
-        return GateResult(name=gate.name, status=GateStatus.PASSED, output="", duration_seconds=0.1)
+        return GateResult(
+            name=gate.name,
+            status=GateStatus.PASSED,
+            severity=GateSeverity.PASS,
+            output="",
+            duration_seconds=0.1,
+        )
 
     verifier._run_gate_logic = AsyncMock(side_effect=side_effect)
     results = await verifier._run_parallel_batch(gates)
@@ -139,9 +161,19 @@ async def test_run_parallel_batch_optional_failure(verifier):
     async def side_effect(gate):
         if gate.name == "p1":
             return GateResult(
-                name="p1", status=GateStatus.FAILED, output="fail", duration_seconds=1.0
+                name="p1",
+                status=GateStatus.FAILED,
+                severity=GateSeverity.FAIL,
+                output="fail",
+                duration_seconds=1.0,
             )
-        return GateResult(name="p2", status=GateStatus.PASSED, output="", duration_seconds=1.0)
+        return GateResult(
+            name="p2",
+            status=GateStatus.PASSED,
+            severity=GateSeverity.PASS,
+            output="",
+            duration_seconds=1.0,
+        )
 
     verifier._run_gate_logic = AsyncMock(side_effect=side_effect)
     results = await verifier._run_parallel_batch(gates)
@@ -157,7 +189,13 @@ async def test_run_parallel_batch_timeout(verifier):
 
     async def long_running_gate(*_args, **_kwargs):
         await asyncio.sleep(0.1)
-        return GateResult(name="p1", status=GateStatus.PASSED, output="", duration_seconds=0.1)
+        return GateResult(
+            name="p1",
+            status=GateStatus.PASSED,
+            severity=GateSeverity.PASS,
+            output="",
+            duration_seconds=0.1,
+        )
 
     verifier._run_gate_logic = AsyncMock(side_effect=long_running_gate)
     results = await verifier._run_parallel_batch(gates)
@@ -177,10 +215,18 @@ async def test_run_all_orchestration(verifier):
     verifier.config.verifier.quality_gates = gates
 
     mock_results = {
-        "s1": GateResult(name="s1", status=GateStatus.PASSED, duration_seconds=1.0),
-        "p1": GateResult(name="p1", status=GateStatus.PASSED, duration_seconds=1.0),
-        "p2": GateResult(name="p2", status=GateStatus.PASSED, duration_seconds=1.0),
-        "s2": GateResult(name="s2", status=GateStatus.PASSED, duration_seconds=1.0),
+        "s1": GateResult(
+            name="s1", status=GateStatus.PASSED, severity=GateSeverity.PASS, duration_seconds=1.0
+        ),
+        "p1": GateResult(
+            name="p1", status=GateStatus.PASSED, severity=GateSeverity.PASS, duration_seconds=1.0
+        ),
+        "p2": GateResult(
+            name="p2", status=GateStatus.PASSED, severity=GateSeverity.PASS, duration_seconds=1.0
+        ),
+        "s2": GateResult(
+            name="s2", status=GateStatus.PASSED, severity=GateSeverity.PASS, duration_seconds=1.0
+        ),
     }
 
     async def side_effect(gate):
@@ -207,7 +253,9 @@ async def test_run_all_stops_after_required_failure(verifier):
 
     # s1 fails, so p1, p2, and s2 should not run
     verifier._run_gate_logic = AsyncMock(
-        return_value=GateResult(name="s1", status=GateStatus.FAILED, duration_seconds=1.0)
+        return_value=GateResult(
+            name="s1", status=GateStatus.FAILED, severity=GateSeverity.FAIL, duration_seconds=1.0
+        )
     )
 
     result = await verifier.run_all()

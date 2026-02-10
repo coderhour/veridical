@@ -3,7 +3,7 @@ import re
 import time
 from pathlib import Path
 
-from veridical.models.result import GateResult, GateStatus
+from veridical.models.result import GateResult, GateSeverity, GateStatus
 
 # Regex to find unchecked markdown checkboxes
 INCOMPLETE_TASK_RE = re.compile(r"^\s*-\s*\[\s\]\s+(.*)$", re.MULTILINE)
@@ -32,6 +32,7 @@ def verify_task_completion(gate_name: str, tasks_file_path: Path) -> GateResult:
         return GateResult(
             name=gate_name,
             status=GateStatus.ERROR,
+            severity=GateSeverity.FAIL,
             error_output=f"File not found: {tasks_file_path}",
             duration_seconds=time.monotonic() - start_time,
         )
@@ -54,6 +55,7 @@ def verify_task_completion(gate_name: str, tasks_file_path: Path) -> GateResult:
         return GateResult(
             name=gate_name,
             status=GateStatus.PASSED,
+            severity=GateSeverity.PASS,
             duration_seconds=time.monotonic() - start_time,
         )
 
@@ -64,6 +66,7 @@ def verify_task_completion(gate_name: str, tasks_file_path: Path) -> GateResult:
     return GateResult(
         name=gate_name,
         status=GateStatus.FAILED,
+        severity=GateSeverity.FAIL,
         error_output=error_output,
         duration_seconds=time.monotonic() - start_time,
     )

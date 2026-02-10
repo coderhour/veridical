@@ -75,7 +75,7 @@ verifier:
 
   # Quality gates to run for verification
   # Gates with `parallel: true` will be grouped into batches and run concurrently
-  # Gate types: command, task_completion
+  # Gate types: command, task_completion, assertion, diff_scope, composite
   quality_gates:
     # Task completion gate (checks tasks.md for completion status)
     - name: task_completion
@@ -108,6 +108,53 @@ verifier:
       timeout: 120
       required: true
       parallel: true
+
+    # --- Verification Rule DSL Examples ---
+
+    # Assertion gate: declarative file and content checks
+    # - name: check_required_files
+    #   type: assertion
+    #   assertions:
+    #     - assert_file_exists: ["src/main.py", "README.md"]
+    #     - assert_content_matches:
+    #         file: README.md
+    #         pattern: "## Installation"
+    #     - assert_json_schema:
+    #         file: config.json
+    #         schema: schemas/config.schema.json
+
+    # Diff scope gate: verify only expected files were modified
+    # - name: scope_check
+    #   type: diff_scope
+    #   allowed_patterns: ["src/**", "tests/**"]
+
+    # Conditional gate: run only when specific files changed
+    # - name: mypy_conditional
+    #   command: mypy src/
+    #   when_files_changed: ["src/**/*.py"]
+
+    # Warn-only gate: failure produces a warning, does not block the loop
+    # - name: coverage_check
+    #   command: pytest --cov --cov-fail-under=80
+    #   warn_only: true
+
+    # Exit code mapping: map specific exit codes to pass/warn/fail
+    # - name: custom_linter
+    #   command: ./lint.sh
+    #   exit_code_map:
+    #     0: pass
+    #     1: fail
+    #     2: warn
+
+    # Composite gate: group sub-gates with AND/OR logic
+    # - name: quality_suite
+    #   type: composite
+    #   mode: all_of  # or "any_of"
+    #   gates:
+    #     - name: lint
+    #       command: ruff check src/
+    #     - name: typecheck
+    #       command: mypy src/
 
   # Optional: Local LLM for advanced log analysis (e.g., Ollama)
   # local_llm:
