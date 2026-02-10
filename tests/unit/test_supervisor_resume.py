@@ -1,13 +1,13 @@
-"""Tests for supervisor session resume functionality."""
+"""Tests for supervisor session resume functionality.
 
-from datetime import datetime
+Updated to use the Worker protocol abstraction.
+"""
+
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from veridical.api.exceptions import APIError
-from veridical.api.models import SessionResponse, SessionState
 from veridical.config.schema import (
     GitConfig,
     JulesConfig,
@@ -16,9 +16,19 @@ from veridical.config.schema import (
     VerifierConfig,
 )
 from veridical.models.result import VerificationResult
-from veridical.poller.monitor import PollResult
 from veridical.supervisor.loop import Supervisor
-from veridical.synchronizer.patch import PatchResult
+from veridical.worker.models import (
+    PollResult,
+    SyncResult,
+    WorkHandle,
+    WorkResult,
+    WorkStatus,
+)
+
+
+def _make_handle(session_id: str, **extra: object) -> WorkHandle:
+    """Create a WorkHandle with a session_id."""
+    return WorkHandle(backend="jules", handle_data={"session_id": session_id, **extra})
 
 
 @pytest.mark.unit
@@ -40,305 +50,196 @@ class TestSupervisorSessionResume:
         )
 
     @pytest.fixture
-    def mock_client(self) -> AsyncMock:
-        """Create a mock Jules client."""
-        return AsyncMock()
+    def mock_synchronizer(self) -> MagicMock:
+        """Create a mock synchronizer for branch management."""
+        sync = MagicMock()
+        sync.starting_branch = "main"
+        sync.work_branch = "feat/test-task"
+        sync._work_branch = "feat/test-task"
+        sync.setup_work_branch = MagicMock()
+        sync.merge_to_main = MagicMock(return_value="commit123")
+        sync.cleanup_branch = MagicMock()
+        sync.git = MagicMock()
+        sync.patch_applier = MagicMock()
+        return sync
 
     @pytest.fixture
-    def supervisor(self, mock_config: VeridicalConfig, tmp_path: Path) -> Supervisor:
-        """Create a supervisor instance with mocked dependencies."""
-        # Initialize git repo to prevent SynchronizationError if mocks fail
-        import subprocess
+    def mock_worker(self, mock_synchronizer: MagicMock) -> AsyncMock:
+        """Create a mock worker implementing the Worker protocol."""
+        worker = AsyncMock()
+        worker.synchronizer = mock_synchronizer
+        worker.progress = MagicMock()
+        worker.dispatcher = MagicMock()
+        return worker
 
-        subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
-        subprocess.run(
-            ["git", "config", "user.email", "test@example.com"],
-            cwd=tmp_path,
-            check=True,
-            capture_output=True,
-        )
-        subprocess.run(
-            ["git", "config", "user.name", "Test User"],
-            cwd=tmp_path,
-            check=True,
-            capture_output=True,
-        )
-        subprocess.run(
-            ["git", "commit", "--allow-empty", "-m", "Initial"],
-            cwd=tmp_path,
-            check=True,
-            capture_output=True,
-        )
-
-        # Create a more thorough mock client that prevents real resource creation
-        mock_client = AsyncMock()
-        mock_client._client = None  # Prevent real httpx client creation
-
-        with (
-            patch("veridical.synchronizer.patch.GitWrapper") as mock_git_patch,
-            patch("veridical.synchronizer.branch.GitWrapper") as mock_git_branch,
-        ):
-            # Mock get_current_branch to return "main" for all tests
-            mock_git_patch.return_value.get_current_branch.return_value = "main"
-            mock_git_branch.return_value.get_current_branch.return_value = "main"
-
-            sup = Supervisor(mock_config, mock_client, tmp_path)
-            # Ensure work_branch is a string to prevent Pydantic ValidationError
-            sup.synchronizer._work_branch = "feat/test-task"
-
-            try:
-                yield sup
-            finally:
-                # Clean up any resources that might have been created
-                if hasattr(sup.client, "_client") and sup.client._client:
-                    # This shouldn't happen with our mock, but just in case
-                    try:
-                        import asyncio
-                        import contextlib
-
-                        with contextlib.suppress(RuntimeError):
-                            asyncio.run(sup.client._client.aclose())
-                    except Exception:
-                        pass  # Ignore cleanup errors
+    @pytest.fixture
+    def supervisor(
+        self,
+        mock_config: VeridicalConfig,
+        mock_worker: AsyncMock,
+        tmp_path: Path,
+    ) -> Supervisor:
+        """Create a supervisor instance with mocked worker."""
+        sup = Supervisor(mock_config, mock_worker, tmp_path)
+        return sup
 
     @pytest.mark.asyncio
     async def test_run_with_session_id_skips_dispatching(self, supervisor: Supervisor) -> None:
         """Test that providing session_id skips dispatching on first iteration."""
-        # Mock successful poll result
-        poll_result = PollResult(
-            session_id="existing-session-123",
-            final_state=SessionState.COMPLETED,
-            started_at=datetime.now(),
-            completed_at=datetime.now(),
-            poll_count=1,
+        worker = supervisor.worker
+
+        # Worker.dispatch returns a handle with resumed=True (no new session created)
+        worker.dispatch.return_value = WorkResult(
+            handle=_make_handle("existing-session-123", resumed=True),
+        )
+        worker.poll.return_value = PollResult(status=WorkStatus.COMPLETED)
+        worker.sync.return_value = SyncResult(
+            success=True, iter_branch="test-branch", diff_hash="abc123"
         )
 
-        # Mock successful patch application
-        patch_result = PatchResult.applied(files_changed=["test.py"], diff_hash="abc123")
-
-        # Mock successful verification
-        verification_result = VerificationResult(
-            passed=True,
-            gates=[],
-            duration_seconds=1.0,
-        )
-
-        with (
-            patch.object(supervisor.poller, "wait_for_completion", return_value=poll_result),
-            patch.object(
-                supervisor.synchronizer,
-                "apply_session_patch",
-                return_value=("test-branch", patch_result),
-            ),
-            patch.object(supervisor.verifier, "run_all", return_value=verification_result),
-            patch.object(supervisor.synchronizer, "merge_to_main", return_value="commit123"),
-            patch.object(supervisor.dispatcher, "create_session") as mock_create_session,
-        ):
+        verification_result = VerificationResult(passed=True, gates=[], duration_seconds=1.0)
+        with patch.object(supervisor.verifier, "run_all", return_value=verification_result):
             result = await supervisor.run("Test task", session_id="existing-session-123")
 
-            # Verify dispatcher was NOT called on first iteration
-            mock_create_session.assert_not_called()
+        # Worker.dispatch was called with session_id (resume path)
+        worker.dispatch.assert_called_once()
+        call_kwargs = worker.dispatch.call_args
+        assert call_kwargs.kwargs.get("session_id") == "existing-session-123"
+        assert call_kwargs.kwargs.get("iteration") == 1
 
-            # Verify success
-            assert result.success
-            assert result.iterations == 1
+        assert result.success
+        assert result.iterations == 1
 
     @pytest.mark.asyncio
     async def test_run_without_session_id_creates_new_session(self, supervisor: Supervisor) -> None:
         """Test that normal flow creates a new session when no session_id provided."""
-        # Mock session creation
-        mock_session = SessionResponse(
-            name="sessions/new-session-456",
-            state=SessionState.IN_PROGRESS,
+        worker = supervisor.worker
+
+        worker.dispatch.return_value = WorkResult(
+            handle=_make_handle("new-session-456", prompt="Build prompt"),
+        )
+        worker.poll.return_value = PollResult(status=WorkStatus.COMPLETED)
+        worker.sync.return_value = SyncResult(
+            success=True, iter_branch="test-branch", diff_hash="abc123"
         )
 
-        # Mock successful poll result
-        poll_result = PollResult(
-            session_id="new-session-456",
-            final_state=SessionState.COMPLETED,
-            started_at=datetime.now(),
-            completed_at=datetime.now(),
-            poll_count=1,
-        )
-
-        # Mock successful patch application
-        patch_result = PatchResult.applied(files_changed=["test.py"], diff_hash="abc123")
-
-        # Mock successful verification
-        verification_result = VerificationResult(
-            passed=True,
-            gates=[],
-            duration_seconds=1.0,
-        )
-
-        with (
-            patch.object(
-                supervisor.dispatcher, "create_session", return_value=mock_session
-            ) as mock_create_session,
-            patch.object(supervisor.poller, "wait_for_completion", return_value=poll_result),
-            patch.object(
-                supervisor.synchronizer,
-                "apply_session_patch",
-                return_value=("test-branch", patch_result),
-            ),
-            patch.object(supervisor.verifier, "run_all", return_value=verification_result),
-            patch.object(supervisor.synchronizer, "merge_to_main", return_value="commit123"),
-        ):
+        verification_result = VerificationResult(passed=True, gates=[], duration_seconds=1.0)
+        with patch.object(supervisor.verifier, "run_all", return_value=verification_result):
             result = await supervisor.run("Test task")
 
-            # Verify dispatcher WAS called
-            mock_create_session.assert_called_once()
+        # Worker.dispatch was called without session_id
+        worker.dispatch.assert_called_once()
+        call_kwargs = worker.dispatch.call_args
+        assert call_kwargs.kwargs.get("session_id") is None
 
-            # Verify success
-            assert result.success
-            assert result.iterations == 1
+        assert result.success
+        assert result.iterations == 1
 
     @pytest.mark.asyncio
     async def test_resume_then_iterate_sends_feedback_to_same_session(
         self, supervisor: Supervisor
     ) -> None:
         """Test that subsequent iterations send feedback to the same session instead of creating new ones."""
-        # Mock poll results - both iterations use the same session
-        now = datetime.now()
-        poll_result_iter1 = PollResult(
-            session_id="existing-session-123",
-            final_state=SessionState.COMPLETED,
-            started_at=now,
-            completed_at=now,
-            poll_count=1,
-        )
-        poll_result_iter2 = PollResult(
-            session_id="existing-session-123",  # Same session
-            final_state=SessionState.COMPLETED,
-            started_at=now,
-            completed_at=now,
-            poll_count=1,
-        )
+        worker = supervisor.worker
 
-        # Mock patch results (different hashes to avoid stagnation detection)
-        patch_result1 = PatchResult.applied(files_changed=["test.py"], diff_hash="abc123")
-        patch_result2 = PatchResult.applied(files_changed=["test.py"], diff_hash="def456")
+        # Iteration 1: resume existing session
+        # Iteration 2: send feedback to same session
+        worker.dispatch.side_effect = [
+            WorkResult(handle=_make_handle("existing-session-123", resumed=True)),
+            WorkResult(handle=_make_handle("existing-session-123")),
+        ]
+        worker.poll.side_effect = [
+            PollResult(status=WorkStatus.COMPLETED),
+            PollResult(status=WorkStatus.COMPLETED),
+        ]
+        worker.sync.side_effect = [
+            SyncResult(success=True, iter_branch="test-branch-1", diff_hash="abc123"),
+            SyncResult(success=True, iter_branch="test-branch-2", diff_hash="def456"),
+        ]
 
-        # Mock verification results (fail first, pass second)
-        verification_result_fail = VerificationResult(
-            passed=False,
-            gates=[],
-            duration_seconds=1.0,
-        )
-        verification_result_pass = VerificationResult(
-            passed=True,
-            gates=[],
-            duration_seconds=1.0,
-        )
-
-        # Create a mock for the client's send_message method
-        mock_send_message = AsyncMock()
+        verification_fail = VerificationResult(passed=False, gates=[], duration_seconds=1.0)
+        verification_pass = VerificationResult(passed=True, gates=[], duration_seconds=1.0)
 
         with (
-            patch.object(supervisor.dispatcher, "create_session") as mock_create_session,
-            patch.object(supervisor.client, "send_message", mock_send_message),
-            patch.object(
-                supervisor.poller,
-                "wait_for_completion",
-                side_effect=[poll_result_iter1, poll_result_iter2],
-            ),
-            patch.object(
-                supervisor.synchronizer,
-                "apply_session_patch",
-                side_effect=[
-                    ("test-branch-1", patch_result1),
-                    ("test-branch-2", patch_result2),
-                ],
-            ),
             patch.object(
                 supervisor.verifier,
                 "run_all",
-                side_effect=[verification_result_fail, verification_result_pass],
+                side_effect=[verification_fail, verification_pass],
             ),
             patch.object(supervisor.verifier, "generate_feedback", return_value="Test failed"),
-            patch.object(supervisor.synchronizer, "cleanup_branch"),
-            patch.object(supervisor.synchronizer, "merge_to_main", return_value="commit123"),
         ):
             result = await supervisor.run("Test task", session_id="existing-session-123")
 
-            # Verify dispatcher was NOT called (we never create a new session)
-            mock_create_session.assert_not_called()
+        # Worker.dispatch called twice (once per iteration)
+        assert worker.dispatch.call_count == 2
 
-            # Verify send_message was called for iteration 2
-            mock_send_message.assert_called_once()
-            call_args = mock_send_message.call_args
-            assert call_args[0][0] == "existing-session-123"  # Same session ID
+        # Second call should have session_id and iteration=2
+        second_call = worker.dispatch.call_args_list[1]
+        assert second_call.kwargs.get("session_id") == "existing-session-123"
+        assert second_call.kwargs.get("iteration") == 2
 
-            # Verify success after 2 iterations
-            assert result.success
-            assert result.iterations == 2
+        assert result.success
+        assert result.iterations == 2
 
     @pytest.mark.asyncio
     async def test_resume_with_invalid_session_fails_gracefully(
         self, supervisor: Supervisor
     ) -> None:
         """Test that invalid session ID fails gracefully with clear message."""
-        # Mock API error (404 Not Found) from poller
-        api_error = APIError(
-            "API request failed: 404",
-            status_code=404,
-            response_body='{"error": "Session not found"}',
-        )
-        with patch.object(supervisor.poller, "wait_for_completion", side_effect=api_error):
-            result = await supervisor.run("Test task", session_id="invalid-session-999")
+        worker = supervisor.worker
 
-            # Verify failure with clear message
-            assert not result.success
-            assert result.failure_reason == "Invalid session ID"
-            assert "invalid-session-999" in result.error_context
-            assert "could not be found" in result.error_context
-            assert result.iterations == 1
+        worker.dispatch.return_value = WorkResult(
+            handle=_make_handle("invalid-session-999", resumed=True),
+        )
+        # Poll returns failure with "could not be found" message
+        worker.poll.return_value = PollResult(
+            status=WorkStatus.FAILED,
+            error="The session 'invalid-session-999' could not be found.",
+        )
+
+        result = await supervisor.run("Test task", session_id="invalid-session-999")
+
+        assert not result.success
+        assert "could not be found" in (result.failure_reason or "")
+        assert result.iterations == 1
 
     @pytest.mark.asyncio
     async def test_resume_with_timeout_fails_gracefully(self, supervisor: Supervisor) -> None:
         """Test that timeout during resume fails gracefully."""
-        # Mock timeout error from poller
-        with patch.object(supervisor.poller, "wait_for_completion", side_effect=TimeoutError()):
-            result = await supervisor.run("Test task", session_id="slow-session-123")
+        worker = supervisor.worker
 
-            # Verify failure
-            assert not result.success
-            assert result.failure_reason == "Session timed out"
-            assert result.iterations == 1
+        worker.dispatch.return_value = WorkResult(
+            handle=_make_handle("slow-session-123", resumed=True),
+        )
+        worker.poll.return_value = PollResult(
+            status=WorkStatus.FAILED,
+            error="Session timed out",
+        )
+
+        result = await supervisor.run("Test task", session_id="slow-session-123")
+
+        assert not result.success
+        assert "timed out" in (result.failure_reason or "")
+        assert result.iterations == 1
 
     @pytest.mark.asyncio
     async def test_resume_patch_failure_aborts_immediately(self, supervisor: Supervisor) -> None:
         """Test that patch failure on resumed session aborts instead of retrying."""
-        # Mock successful poll result
-        poll_result = PollResult(
-            session_id="existing-session-123",
-            final_state=SessionState.COMPLETED,
-            started_at=datetime.now(),
-            completed_at=datetime.now(),
-            poll_count=1,
+        worker = supervisor.worker
+
+        worker.dispatch.return_value = WorkResult(
+            handle=_make_handle("existing-session-123", resumed=True),
+        )
+        worker.poll.return_value = PollResult(status=WorkStatus.COMPLETED)
+        worker.sync.return_value = SyncResult(
+            success=False,
+            iter_branch="test-branch",
+            error="patch failed: README.md: patch does not apply",
         )
 
-        # Mock failed patch application
-        patch_result = PatchResult.failed(error="patch failed: README.md: patch does not apply")
+        result = await supervisor.run("Test task", session_id="existing-session-123")
 
-        with (
-            patch.object(supervisor.poller, "wait_for_completion", return_value=poll_result),
-            patch.object(
-                supervisor.synchronizer,
-                "apply_session_patch",
-                return_value=("test-branch", patch_result),
-            ),
-            patch.object(supervisor.synchronizer, "cleanup_branch"),
-            patch.object(supervisor.dispatcher, "create_session") as mock_create_session,
-        ):
-            result = await supervisor.run("Test task", session_id="existing-session-123")
-
-            # Verify that dispatcher was NOT called (should abort, not retry)
-            mock_create_session.assert_not_called()
-
-            # Verify failure with appropriate message
-            assert not result.success
-            assert result.failure_reason == "Resumed session patch failed to apply"
-            assert "existing-session-123" in result.error_context
-            assert "diverged" in result.error_context
-            assert result.iterations == 1
+        # Verify failure — patch failures are not recoverable
+        assert not result.success
+        assert result.failure_reason == "Patch failed to apply"
+        assert result.iterations == 1

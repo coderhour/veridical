@@ -5,6 +5,35 @@ import pytest
 
 from veridical.supervisor.loop import Supervisor
 from veridical.supervisor.state import LoopState
+from veridical.worker.models import (
+    PollResult,
+    SyncResult,
+    WorkHandle,
+    WorkResult,
+    WorkStatus,
+)
+
+
+def _make_handle(session_id: str, **extra: object) -> WorkHandle:
+    return WorkHandle(backend="jules", handle_data={"session_id": session_id, **extra})
+
+
+def _make_mock_worker() -> AsyncMock:
+    """Create a mock worker with a mock synchronizer."""
+    worker = AsyncMock()
+    sync = MagicMock()
+    sync.starting_branch = "main"
+    sync.work_branch = "feat/test"
+    sync._work_branch = "feat/test"
+    sync.setup_work_branch = MagicMock()
+    sync.merge_to_main = MagicMock(return_value="commit-hash")
+    sync.cleanup_branch = MagicMock()
+    sync.git = MagicMock()
+    sync.patch_applier = MagicMock()
+    worker.synchronizer = sync
+    worker.progress = MagicMock()
+    worker.dispatcher = MagicMock()
+    return worker
 
 
 @pytest.mark.asyncio
@@ -14,23 +43,11 @@ async def test_supervisor_resume_loads_state(tmp_path: Path) -> None:
     config.supervisor.max_iterations = 10
     config.supervisor.max_consecutive_failures = 3
     config.supervisor.stagnation_threshold = 3
-    config.jules.backoff_strategy = "constant"
-    config.jules.poll_interval = 0.1
-    config.jules.poll_timeout = 5.0
+    config.worklog.enabled = False
 
-    # Initialize git repo
-    import subprocess
+    worker = _make_mock_worker()
 
-    subprocess.run(["git", "init"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True)
-    subprocess.run(
-        ["git", "commit", "--allow-empty", "-m", "Initial commit"], cwd=tmp_path, check=True
-    )
-
-    client = MagicMock()
-
-    supervisor = Supervisor(config, client, tmp_path)
+    supervisor = Supervisor(config, worker, tmp_path)
 
     # Create state file
     state_file = tmp_path / ".veridical_state.json"
@@ -43,13 +60,7 @@ async def test_supervisor_resume_loads_state(tmp_path: Path) -> None:
     )
     state.save(state_file)
 
-    # Mock dependencies to avoid actual execution
-    supervisor.synchronizer = MagicMock()
-    supervisor.synchronizer.setup_work_branch = MagicMock()
-
     # We want to exit loop immediately after setup
-    # But run() sets circuit breaker count.
-    # We can mock record_iteration to stop the loop or set _is_open
     supervisor.circuit_breaker.record_iteration = MagicMock()
     supervisor.circuit_breaker._is_open = True
 
@@ -57,7 +68,7 @@ async def test_supervisor_resume_loads_state(tmp_path: Path) -> None:
     await supervisor.run("resumed task", resume_from_state=True)
 
     # Verify setup_work_branch called with saved branch
-    supervisor.synchronizer.setup_work_branch.assert_called_with("resumed task", "feat/resumed")
+    worker.synchronizer.setup_work_branch.assert_called_with("resumed task", "feat/resumed")
 
     # Verify circuit breaker iteration set correctly
     # state.iteration is 5. start_iteration = 5.
@@ -72,53 +83,26 @@ async def test_supervisor_cleans_up_state_on_success(tmp_path: Path) -> None:
     config.supervisor.max_iterations = 10
     config.supervisor.max_consecutive_failures = 3
     config.supervisor.stagnation_threshold = 3
-    config.jules.backoff_strategy = "constant"
-    config.jules.poll_interval = 0.1
-    config.jules.poll_timeout = 5.0
+    config.worklog.enabled = False
 
-    # Initialize git repo
-    import subprocess
+    worker = _make_mock_worker()
 
-    subprocess.run(["git", "init"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.name", "Test User"], cwd=tmp_path, check=True)
-    subprocess.run(
-        ["git", "commit", "--allow-empty", "-m", "Initial commit"], cwd=tmp_path, check=True
+    # Worker returns success flow
+    worker.dispatch.return_value = WorkResult(
+        handle=_make_handle("sess-1", prompt="Build prompt"),
     )
+    worker.poll.return_value = PollResult(status=WorkStatus.COMPLETED)
+    worker.sync.return_value = SyncResult(success=True, iter_branch="iter-1", diff_hash="abc")
 
-    client = AsyncMock()  # client needs to be async for await calls
-
-    supervisor = Supervisor(config, client, tmp_path)
+    supervisor = Supervisor(config, worker, tmp_path)
 
     # Create state file
     state_file = tmp_path / ".veridical_state.json"
     state_file.touch()
 
-    # Mock mocks
-    supervisor.synchronizer = MagicMock()
     # verifier run_all returns success
     supervisor.verifier = AsyncMock()
     supervisor.verifier.run_all.return_value = MagicMock(passed=True)
-
-    supervisor.dispatcher = MagicMock()
-    supervisor.dispatcher.create_session = AsyncMock()
-    supervisor.dispatcher.create_session.return_value = MagicMock(session_id="sess-1")
-
-    supervisor.poller = AsyncMock()
-    supervisor.poller.wait_for_completion.return_value = MagicMock(
-        final_state="COMPLETED"  # string or enum
-    )
-    from veridical.api.models import SessionState
-
-    supervisor.poller.wait_for_completion.return_value.final_state = SessionState.COMPLETED
-
-    supervisor.synchronizer.work_branch = "feat/new-task"  # Ensure this is a string for Pydantic
-    supervisor.synchronizer.apply_session_patch = AsyncMock()
-    supervisor.synchronizer.apply_session_patch.return_value = (
-        "iter-1",
-        MagicMock(success=True, status="APPLIED", diff_hash="abc"),
-    )
-    supervisor.synchronizer.merge_to_main = MagicMock(return_value="commit-hash")
 
     # Run
     await supervisor.run("new task")

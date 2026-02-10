@@ -8,21 +8,17 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 
-from veridical.api.client import JulesClient
-from veridical.api.exceptions import APIError
-from veridical.api.models import SessionState
-from veridical.cli.progress import ProgressReporter
-from veridical.dispatcher.session import Dispatcher
-from veridical.models.result import LoopResult, PatchStatus
-from veridical.poller.monitor import Poller
+from veridical.models.result import LoopResult
 from veridical.supervisor.circuit_breaker import CircuitBreaker
 from veridical.supervisor.state import LoopState, SupervisorState
-from veridical.synchronizer.patch import Synchronizer
 from veridical.verifier.quality_gate import Verifier
+from veridical.worker.models import WorkStatus
 from veridical.worklog import WorkLogEntry, WorkLogWriter
 
 if TYPE_CHECKING:
     from veridical.config.schema import VeridicalConfig
+    from veridical.synchronizer.patch import Synchronizer
+    from veridical.worker.protocol import Worker
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +37,7 @@ class Supervisor:
     def __init__(
         self,
         config: "VeridicalConfig",
-        client: JulesClient,
+        worker: "Worker",
         repo_path: Path,
         *,
         verbose: bool = False,
@@ -51,13 +47,13 @@ class Supervisor:
 
         Args:
             config: Veridical configuration
-            client: Jules API client
+            worker: Worker instance implementing the Worker protocol
             repo_path: Path to the repository root
             verbose: Enable verbose output
             console: Rich console instance
         """
         self.config = config
-        self.client = client
+        self.worker = worker
         self.repo_path = repo_path
         self.verbose = verbose
         self.console = console or Console()
@@ -72,11 +68,7 @@ class Supervisor:
             stagnation_threshold=config.supervisor.stagnation_threshold,
         )
 
-        # Initialize components
-        self.progress = ProgressReporter(console=self.console, verbose=self.verbose)
-        self.dispatcher = Dispatcher(config, client, repo_path)
-        self.poller = Poller(config, client, progress=self.progress)
-        self.synchronizer = Synchronizer(config, repo_path, console=self.console)
+        # Initialize verifier (the only component the supervisor owns directly)
         self.verifier = Verifier(config, repo_path)
 
         # Initialize work log writer if enabled
@@ -106,6 +98,23 @@ class Supervisor:
         logger.info(f"Transitioning: {self._state} -> {new_state}")
         self._state = new_state
 
+    def _get_synchronizer(self) -> "Synchronizer":
+        """Get the synchronizer from the worker for branch management.
+
+        Returns:
+            Synchronizer instance from the worker
+
+        Raises:
+            AttributeError: If the worker does not expose a synchronizer
+        """
+        sync = getattr(self.worker, "synchronizer", None)
+        if sync is None:
+            raise AttributeError(
+                f"Worker {type(self.worker).__name__} does not expose a 'synchronizer' attribute. "
+                "Branch management requires a synchronizer."
+            )
+        return sync
+
     async def run(
         self,
         task_description: str,
@@ -128,10 +137,15 @@ class Supervisor:
         Returns:
             Result of the loop execution
         """
-        # Update verifier and dispatcher with the tasks file if provided
+        # Update verifier with the tasks file if provided
         if tasks_file:
             self.verifier.current_tasks_file = tasks_file
-            self.dispatcher.current_tasks_file = tasks_file
+            # Also propagate to worker's dispatcher if available
+            dispatcher = getattr(self.worker, "dispatcher", None)
+            if dispatcher is not None:
+                dispatcher.current_tasks_file = tasks_file
+
+        synchronizer = self._get_synchronizer()
 
         state_file = self.repo_path / ".veridical_state.json"
         current_session_id: str | None = session_id
@@ -175,13 +189,17 @@ class Supervisor:
                 # For safety, let's continue as fresh if load fails, but warn.
 
         # Set up work branch for this run
-        self.synchronizer.setup_work_branch(task_description, target_branch)
+        synchronizer.setup_work_branch(task_description, target_branch)
 
         # Clear circuit breaker hashes if fresh start, but keep iteration if resumed
         if not resume_from_state:
             self._circuit_breaker.reset()
 
-        with self.progress:
+        # Use worker's progress context manager if available
+        progress = getattr(self.worker, "progress", None)
+        progress_ctx = progress if progress is not None else _noop_context()
+
+        with progress_ctx:
             while not self._circuit_breaker.is_open:
                 self._circuit_breaker.record_iteration()
                 if self._circuit_breaker.is_open:
@@ -196,7 +214,7 @@ class Supervisor:
                         task_description=task_description,
                         iteration=iteration,
                         session_id=current_session_id,
-                        work_branch=self.synchronizer.work_branch or "unknown",
+                        work_branch=synchronizer.work_branch or "unknown",
                         error_context=error_context,
                         started_at=started_at,
                     )
@@ -205,7 +223,6 @@ class Supervisor:
                         self._current_loop_state.save(state_file)
 
                 logger.info(f"--- Starting Iteration {iteration} ---")
-                self.progress.set_iterations(iteration, self.config.supervisor.max_iterations)
 
                 # Start work log entry for this iteration
                 self._iteration_start_time = datetime.now()
@@ -218,205 +235,155 @@ class Supervisor:
                         error_context=error_context,
                     )
 
-                # 1. DISPATCHING or SENDING FEEDBACK
-                if current_session_id and iteration == 1 and (session_id or resume_from_state):
-                    # Resume existing session - skip dispatching
-                    self.progress.set_state("Resuming session...")
-                    logger.info(f"Resuming existing session: {current_session_id}")
-                elif current_session_id and iteration > 1:
-                    # Send feedback to existing session instead of creating new one
-                    self._transition_to(SupervisorState.DISPATCHING)
-                    self.progress.set_state("Sending feedback...")
-                    logger.info(f"Sending feedback to existing session: {current_session_id}")
+                # 1. DISPATCHING via Worker
+                self._transition_to(SupervisorState.DISPATCHING)
+                work_result = await self.worker.dispatch(
+                    task_description,
+                    error_context,
+                    iteration=iteration,
+                    session_id=current_session_id,
+                )
 
-                    feedback_prompt = self.dispatcher.build_prompt(task_description, error_context)
-                    await self.client.send_message(current_session_id, feedback_prompt)
-                else:
-                    # First iteration - create new session
-                    self._transition_to(SupervisorState.DISPATCHING)
-                    self.progress.set_state("Creating session...")
-                    prompt = self.dispatcher.build_prompt(task_description, error_context)
+                if not work_result.dispatched:
+                    self._circuit_breaker.record_failure()
+                    error_context = work_result.error or "Dispatch failed"
+                    continue
 
-                    # Log the prompt sent
-                    if self._current_work_log_entry:
+                # Extract session ID from handle for state persistence
+                handle = work_result.handle
+                handle_session_id = handle.handle_data.get("session_id")
+                if handle_session_id:
+                    current_session_id = handle_session_id
+
+                # Log the prompt sent (if available in handle)
+                if self._current_work_log_entry:
+                    prompt = handle.handle_data.get("prompt")
+                    if prompt:
                         self._current_work_log_entry.prompt_sent = prompt
-
-                    # Create session (auto-detect source)
-                    session = await self.dispatcher.create_session(prompt, title=task_description)
-                    current_session_id = session.session_id
-
-                    # Update work log entry with session ID
-                    if self._current_work_log_entry:
+                    if current_session_id:
                         self._current_work_log_entry.session_id = current_session_id
 
-                    # Save state immediately after creating session
+                # Save state immediately after dispatch
+                if current_session_id:
                     self._update_state(
                         task_description=task_description,
                         iteration=iteration,
                         session_id=current_session_id,
-                        work_branch=self.synchronizer.work_branch or "unknown",
+                        work_branch=synchronizer.work_branch or "unknown",
                         error_context=error_context,
                         started_at=started_at,
                     )
                     if self._current_loop_state:
                         self._current_loop_state.save(state_file)
 
-                # 2. POLLING
+                # 2. POLLING via Worker
                 self._transition_to(SupervisorState.POLLING)
-                self.progress.set_state("Polling for updates...")
-                try:
-                    assert current_session_id is not None
-                    poll_result = await self.poller.wait_for_completion(current_session_id)
-                except TimeoutError:
-                    self.synchronizer.git.checkout(self.synchronizer.starting_branch)
-                    self._transition_to(SupervisorState.FAILED)
-                    return LoopResult.failure_result(
-                        iterations=iteration,
-                        started_at=started_at,
-                        failure_reason="Session timed out",
-                    )
-                except APIError as e:
-                    # Handle API errors (e.g., invalid session ID returns 404)
-                    self.synchronizer.git.checkout(self.synchronizer.starting_branch)
-                    self._transition_to(SupervisorState.FAILED)
+                poll_result = await self.worker.poll(handle)
 
-                    # Provide clear message for resumed sessions
-                    if session_id and iteration == 1:
+                if poll_result.status == WorkStatus.FAILED:
+                    self._circuit_breaker.record_failure()
+                    error_context = poll_result.error or "Worker failed"
+
+                    # Fatal errors — abort immediately
+                    if poll_result.error and (
+                        "timed out" in poll_result.error.lower()
+                        or "could not be found" in poll_result.error.lower()
+                    ):
+                        synchronizer.git.checkout(synchronizer.starting_branch)
+                        self._transition_to(SupervisorState.FAILED)
                         return LoopResult.failure_result(
                             iterations=iteration,
                             started_at=started_at,
-                            failure_reason="Invalid session ID",
-                            error_context=(
-                                f"The session ID '{session_id}' could not be found. "
-                                "Please verify the session ID is correct and try again.\n\n"
-                                f"API Error: {e}"
-                            ),
+                            failure_reason=poll_result.error,
                         )
-
-                    return LoopResult.failure_result(
-                        iterations=iteration,
-                        started_at=started_at,
-                        failure_reason="API error during polling",
-                        error_context=str(e),
-                    )
-
-                if poll_result.final_state == SessionState.FAILED:
-                    self._circuit_breaker.record_failure()
-                    error_context = f"Jules session {current_session_id} failed"
                     continue
 
-                # 3. SYNCING
+                # 3. SYNCING via Worker
                 self._transition_to(SupervisorState.SYNCING)
-                self.progress.set_state("Applying patch...")
-
-                iter_branch, patch_result = await self.synchronizer.apply_session_patch(
-                    self.client,
-                    current_session_id,
-                    iteration,
-                )
+                sync_result = await self.worker.sync(handle, iteration)
 
                 # Handle pending human review
-                if patch_result.status == PatchStatus.PENDING_REVIEW:
-                    self.progress.set_state("Awaiting human review...")
-                    logger.info(
-                        f"Files requiring human review: {patch_result.review_required_files}"
-                    )
-
-                    # Prompt user for approval
-                    pending_patch = self.synchronizer.patch_applier.pending_patch
+                if sync_result.needs_human_review:
+                    review_files = sync_result.review_required_files or []
+                    pending_patch = synchronizer.patch_applier.pending_patch
                     if pending_patch:
-                        approved = self.synchronizer.prompt_human_review(
-                            patch_result.review_required_files,
+                        approved = synchronizer.prompt_human_review(
+                            review_files,
                             pending_patch,
                         )
-
                         if approved:
-                            # Apply the pending patch now that it's approved
-                            patch_result = self.synchronizer.apply_pending_patch()
+                            patch_result = synchronizer.apply_pending_patch()
                             if not patch_result.success:
                                 self._circuit_breaker.record_failure()
-                                self.synchronizer.cleanup_branch(iter_branch)
+                                if sync_result.iter_branch:
+                                    synchronizer.cleanup_branch(sync_result.iter_branch)
                                 error_context = (
                                     f"Patch application failed after approval: {patch_result.error}"
                                 )
                                 continue
+                            # Update sync_result with the applied patch info
+                            sync_result = sync_result.model_copy(
+                                update={
+                                    "success": True,
+                                    "diff_hash": patch_result.diff_hash,
+                                    "needs_human_review": False,
+                                }
+                            )
                         else:
-                            # User rejected the changes
                             self._circuit_breaker.record_failure()
-                            self.synchronizer.cleanup_branch(iter_branch)
-                            self.synchronizer.git.checkout(self.synchronizer.starting_branch)
+                            if sync_result.iter_branch:
+                                synchronizer.cleanup_branch(sync_result.iter_branch)
+                            synchronizer.git.checkout(synchronizer.starting_branch)
                             self._transition_to(SupervisorState.FAILED)
                             return LoopResult.failure_result(
                                 iterations=iteration,
                                 started_at=started_at,
                                 failure_reason="Human review rejected",
                                 error_context=(
-                                    f"User rejected changes to: "
-                                    f"{', '.join(patch_result.review_required_files)}"
+                                    f"User rejected changes to: {', '.join(review_files)}"
                                 ),
                             )
                     else:
-                        # No pending patch stored - unexpected state
                         self._circuit_breaker.record_failure()
-                        self.synchronizer.cleanup_branch(iter_branch)
+                        if sync_result.iter_branch:
+                            synchronizer.cleanup_branch(sync_result.iter_branch)
                         error_context = "Pending review but no patch data found"
                         continue
 
-                if not patch_result.success:
+                if not sync_result.success:
                     self._circuit_breaker.record_failure()
-                    # Clean up branch
-                    self.synchronizer.cleanup_branch(iter_branch)
-
-                    # If this was a resumed session, abort instead of retrying
-                    # The patch was created against a different codebase version
-                    if session_id and iteration == 1:
-                        self.synchronizer.git.checkout(self.synchronizer.starting_branch)
-                        self._transition_to(SupervisorState.FAILED)
-                        return LoopResult.failure_result(
-                            iterations=iteration,
-                            started_at=started_at,
-                            failure_reason="Resumed session patch failed to apply",
-                            error_context=(
-                                f"The patch from session {session_id} could not be applied. "
-                                "This usually means your local code has diverged from what "
-                                "Jules worked against. Try syncing with the remote branch or "
-                                "starting a new session without --session-id.\n\n"
-                                f"Details: {patch_result.error}"
-                            ),
-                        )
+                    if sync_result.iter_branch:
+                        synchronizer.cleanup_branch(sync_result.iter_branch)
 
                     # Patch failures are not recoverable - stop immediately
-                    self.synchronizer.git.checkout(self.synchronizer.starting_branch)
+                    synchronizer.git.checkout(synchronizer.starting_branch)
                     self._transition_to(SupervisorState.FAILED)
                     return LoopResult.failure_result(
                         iterations=iteration,
                         started_at=started_at,
                         failure_reason="Patch failed to apply",
-                        error_context=(
-                            f"The patch from session {current_session_id} could not be applied. "
-                            "Patch failures are not recoverable through further iterations.\n\n"
-                            f"Details: {patch_result.error}"
-                        ),
+                        error_context=sync_result.error or "Sync failed",
                     )
 
-                # diff_hash is always set when patch is successfully applied
-                assert patch_result.diff_hash is not None
-                self._circuit_breaker.record_diff_hash(patch_result.diff_hash)
+                # Record diff hash for stagnation detection
+                if sync_result.diff_hash:
+                    self._circuit_breaker.record_diff_hash(sync_result.diff_hash)
 
                 # Record patch summary in work log
-                if self._current_work_log_entry and patch_result.patch_summary:
-                    self._current_work_log_entry.patch_summary = patch_result.patch_summary
+                if self._current_work_log_entry and sync_result.patch_summary:
+                    self._current_work_log_entry.patch_summary = sync_result.patch_summary
 
                 # 4. VERIFYING
                 self._transition_to(SupervisorState.VERIFYING)
-                self.progress.set_state("Running quality gates...")
                 verification_result = await self.verifier.run_all()
 
                 if verification_result.passed:
                     # 5. SUCCESS
                     self._transition_to(SupervisorState.SUCCESS)
-                    self.progress.set_state("Merging changes...")
-                    commit_hash = self.synchronizer.merge_to_main(iter_branch, task_description)
+                    assert sync_result.iter_branch is not None
+                    commit_hash = synchronizer.merge_to_main(
+                        sync_result.iter_branch, task_description
+                    )
                     self._circuit_breaker.record_success()
 
                     # Log successful iteration
@@ -433,12 +400,11 @@ class Supervisor:
                         iterations=iteration,
                         started_at=started_at,
                         final_commit=commit_hash,
-                        target_branch=self.synchronizer.work_branch,
+                        target_branch=synchronizer.work_branch,
                     )
 
                 # 6. FAILURE (Loop)
                 self._circuit_breaker.record_failure()
-                self.progress.set_state("Compiling feedback...")
                 error_context = await self.verifier.generate_feedback(verification_result)
 
                 # Log failed iteration
@@ -448,14 +414,12 @@ class Supervisor:
                     verification_errors=error_context,
                 )
 
-                # Cleanup failed branch to keep repo clean?
-                # Or keep it for inspection?
-                # Usually strict cleanup in loop, unless debug mode.
-                # But we are iterating on main.
-                self.synchronizer.cleanup_branch(iter_branch)
+                # Cleanup failed branch
+                if sync_result.iter_branch:
+                    synchronizer.cleanup_branch(sync_result.iter_branch)
 
         # Loop terminated
-        self.synchronizer.git.checkout(self.synchronizer.starting_branch)
+        synchronizer.git.checkout(synchronizer.starting_branch)
         self._transition_to(SupervisorState.FAILED)
         return LoopResult.failure_result(
             iterations=self._circuit_breaker.iteration_count,
@@ -540,9 +504,20 @@ class Supervisor:
 
         # Attempt to return to starting branch to leave repo clean
         try:
-            if hasattr(self, "synchronizer"):
-                self.synchronizer.git.checkout(self.synchronizer.starting_branch)
+            synchronizer = getattr(self.worker, "synchronizer", None)
+            if synchronizer is not None:
+                synchronizer.git.checkout(synchronizer.starting_branch)
         except Exception as e:
             logger.warning(f"Failed to cleanup branch on shutdown: {e}")
 
         sys.exit(0)
+
+
+class _noop_context:
+    """No-op context manager for workers without a progress reporter."""
+
+    def __enter__(self) -> "_noop_context":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        pass

@@ -1,214 +1,165 @@
+"""Integration tests for the Supervisor loop.
+
+Updated to use the Worker protocol abstraction.
+"""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from veridical.api.models import SessionState
-from veridical.models.result import PatchResult, PatchStatus, VerificationResult
+from veridical.models.result import VerificationResult
 from veridical.supervisor.loop import Supervisor
+from veridical.worker.models import (
+    PollResult,
+    SyncResult,
+    WorkHandle,
+    WorkResult,
+    WorkStatus,
+)
+
+
+def _make_handle(session_id: str, **extra: object) -> WorkHandle:
+    return WorkHandle(backend="jules", handle_data={"session_id": session_id, **extra})
+
+
+def _make_mock_worker() -> AsyncMock:
+    """Create a mock worker with a mock synchronizer."""
+    worker = AsyncMock()
+    sync = MagicMock()
+    sync.starting_branch = "main"
+    sync.work_branch = "feat/fix-bug"
+    sync._work_branch = "feat/fix-bug"
+    sync.setup_work_branch = MagicMock()
+    sync.merge_to_main = MagicMock(return_value="new_commit_hash")
+    sync.cleanup_branch = MagicMock()
+    sync.git = MagicMock()
+    sync.patch_applier = MagicMock()
+    worker.synchronizer = sync
+    worker.progress = MagicMock()
+    worker.dispatcher = MagicMock()
+    return worker
 
 
 @pytest.mark.asyncio
 async def test_supervisor_one_shot_success(tmp_path) -> None:
     config = MagicMock()
     config.supervisor.max_iterations = 5
-    config.git.base_branch = "main"
     config.supervisor.max_consecutive_failures = 3
     config.supervisor.stagnation_threshold = 3
+    config.worklog.enabled = False
 
-    mock_client = MagicMock()
+    worker = _make_mock_worker()
+    worker.dispatch.return_value = WorkResult(
+        handle=_make_handle("sess_1", prompt="prompt"),
+    )
+    worker.poll.return_value = PollResult(status=WorkStatus.COMPLETED)
+    worker.sync.return_value = SyncResult(success=True, iter_branch="iter-1", diff_hash="hash1")
 
-    with (
-        patch("veridical.supervisor.loop.Dispatcher") as MockDispatcher,
-        patch("veridical.supervisor.loop.Poller") as MockPoller,
-        patch("veridical.supervisor.loop.Synchronizer") as MockSynchronizer,
-        patch("veridical.supervisor.loop.Verifier") as MockVerifier,
-    ):
-        # Setup mocks
-        mock_disp = MockDispatcher.return_value
-        session = MagicMock()
-        session.session_id = "sess_1"
-        mock_disp.create_session = AsyncMock(return_value=session)
-        mock_disp.build_prompt.return_value = "prompt"
+    supervisor = Supervisor(config, worker, tmp_path)
 
-        mock_poller = MockPoller.return_value
-        poll_result = MagicMock()
-        poll_result.final_state = SessionState.COMPLETED
-        mock_poller.wait_for_completion = AsyncMock(return_value=poll_result)
-
-        mock_sync = MockSynchronizer.return_value
-        patch_res = PatchResult(
-            success=True, status=PatchStatus.APPLIED, files_changed=[], diff_hash="hash1"
-        )
-        mock_sync.apply_session_patch = AsyncMock(return_value=("iter-1", patch_res))
-        mock_sync.merge_to_main.return_value = "new_commit_hash"
-        mock_sync.work_branch = "feat/fix-bug"
-        mock_sync.starting_branch = "main"
-
-        mock_verifier = MockVerifier.return_value
-        verify_res = VerificationResult(passed=True, gates=[], duration_seconds=1.0)
-        mock_verifier.run_all = AsyncMock(return_value=verify_res)
-
-        # Run
-        supervisor = Supervisor(config, mock_client, tmp_path)
+    verify_res = VerificationResult(passed=True, gates=[], duration_seconds=1.0)
+    with patch.object(supervisor.verifier, "run_all", AsyncMock(return_value=verify_res)):
         result = await supervisor.run("Fix bug")
 
-        assert result.success
-        assert result.iterations == 1
-        assert result.final_commit == "new_commit_hash"
+    assert result.success
+    assert result.iterations == 1
+    assert result.final_commit == "new_commit_hash"
 
-        mock_disp.create_session.assert_called_once()
-        mock_verifier.run_all.assert_called_once()
+    worker.dispatch.assert_called_once()
+    worker.poll.assert_called_once()
+    worker.sync.assert_called_once()
 
 
 @pytest.mark.asyncio
-@patch("veridical.supervisor.loop.logger")
-async def test_supervisor_iterative_repair(_mock_logger, tmp_path) -> None:
+async def test_supervisor_iterative_repair(tmp_path) -> None:
     config = MagicMock()
     config.supervisor.max_iterations = 5
-    config.git.base_branch = "main"
     config.supervisor.max_consecutive_failures = 3
     config.supervisor.stagnation_threshold = 3
-    # Add verifier config for feedback generator
-    verifier_config = MagicMock()
-    verifier_config.summary_max_length = 2000
-    verifier_config.local_llm = None
-    verifier_config.feedback_mode = "heuristic"
-    config.verifier = verifier_config
-    mock_client = MagicMock()
-    mock_client.send_message = AsyncMock()  # For iteration 2 feedback
+    config.worklog.enabled = False
+
+    worker = _make_mock_worker()
+
+    # Iteration 1: dispatch → poll → sync → verify (fail)
+    # Iteration 2: dispatch → poll → sync → verify (pass)
+    worker.dispatch.side_effect = [
+        WorkResult(handle=_make_handle("sess_1", prompt="p1")),
+        WorkResult(handle=_make_handle("sess_1")),
+    ]
+    worker.poll.side_effect = [
+        PollResult(status=WorkStatus.COMPLETED),
+        PollResult(status=WorkStatus.COMPLETED),
+    ]
+    worker.sync.side_effect = [
+        SyncResult(success=True, iter_branch="iter-1", diff_hash="hash1"),
+        SyncResult(success=True, iter_branch="iter-2", diff_hash="hash2"),
+    ]
+
+    supervisor = Supervisor(config, worker, tmp_path)
+
+    fail_res = VerificationResult(passed=False, gates=[], duration_seconds=1.0)
+    pass_res = VerificationResult(passed=True, gates=[], duration_seconds=1.0)
 
     with (
-        patch("veridical.supervisor.loop.Dispatcher") as MockDispatcher,
-        patch("veridical.supervisor.loop.Poller") as MockPoller,
-        patch("veridical.supervisor.loop.Synchronizer") as MockSynchronizer,
-        patch("veridical.supervisor.loop.Verifier") as MockVerifier,
+        patch.object(
+            supervisor.verifier,
+            "run_all",
+            side_effect=[fail_res, pass_res],
+        ),
+        patch.object(supervisor.verifier, "generate_feedback", return_value="Error info"),
     ):
-        mock_disp = MockDispatcher.return_value
-        session = MagicMock()
-        session.session_id = "sess_1"
-        mock_disp.create_session = AsyncMock(return_value=session)
-        mock_disp.build_prompt.side_effect = ["p1", "p2"]
-
-        mock_poller = MockPoller.return_value
-        poll_result = MagicMock()
-        poll_result.final_state = SessionState.COMPLETED
-        mock_poller.wait_for_completion = AsyncMock(return_value=poll_result)
-
-        mock_sync = MockSynchronizer.return_value
-        # Use different hashes to avoid stagnation detection
-        patch_res1 = PatchResult(
-            success=True, status=PatchStatus.APPLIED, files_changed=[], diff_hash="hash1"
-        )
-        patch_res2 = PatchResult(
-            success=True, status=PatchStatus.APPLIED, files_changed=[], diff_hash="hash2"
-        )
-        mock_sync.apply_session_patch = AsyncMock(
-            side_effect=[("iter-1", patch_res1), ("iter-2", patch_res2)]
-        )
-        mock_sync.merge_to_main.return_value = "final_hash"
-        mock_sync.work_branch = "feat/fix-bug"
-        mock_sync.starting_branch = "main"
-
-        mock_verifier = MockVerifier.return_value
-        # Fail first, pass second
-        fail_res = VerificationResult(passed=False, gates=[], duration_seconds=1.0)
-        pass_res = VerificationResult(passed=True, gates=[], duration_seconds=1.0)
-
-        # Async side effect handling
-        iter_count = 0
-
-        async def verify_side_effect(*_args, **_kwargs):
-            nonlocal iter_count
-            iter_count += 1
-            if iter_count == 1:
-                return fail_res
-            return pass_res
-
-        mock_verifier.run_all.side_effect = verify_side_effect
-
-        mock_verifier.generate_feedback = AsyncMock(return_value="Error info")
-
-        supervisor = Supervisor(config, mock_client, tmp_path)
         result = await supervisor.run("Fix bug")
 
-        assert result.success
-        assert result.iterations == 2
+    assert result.success
+    assert result.iterations == 2
 
-        # Session should only be created once (iteration 1)
-        # Iteration 2 sends feedback to existing session via send_message
-        assert mock_disp.create_session.call_count == 1
-        mock_client.send_message.assert_called_once()
-        # Verify second prompt build included error context
-        mock_disp.build_prompt.assert_called_with("Fix bug", "Error info")
+    # Worker.dispatch called twice (once per iteration)
+    assert worker.dispatch.call_count == 2
+
+    # Second dispatch should include error_context from verification failure
+    second_call = worker.dispatch.call_args_list[1]
+    assert second_call[0][1] == "Error info"  # error_context positional arg
 
 
 @pytest.mark.asyncio
-@patch("veridical.supervisor.loop.logger")
-async def test_supervisor_circuit_breaker(_mock_logger, tmp_path) -> None:
+async def test_supervisor_circuit_breaker(tmp_path) -> None:
     config = MagicMock()
     config.supervisor.max_iterations = 2
-    config.git.base_branch = "main"
     config.supervisor.max_consecutive_failures = 3
     config.supervisor.stagnation_threshold = 3
-    # Add verifier config for feedback generator
-    verifier_config = MagicMock()
-    verifier_config.summary_max_length = 2000
-    verifier_config.local_llm = None
-    verifier_config.feedback_mode = "heuristic"
-    config.verifier = verifier_config
+    config.worklog.enabled = False
 
-    mock_client = MagicMock()
-    mock_client.send_message = AsyncMock()  # For feedback in iterations 2+
+    worker = _make_mock_worker()
+
+    # 3 iterations worth of data (circuit breaker trips after iteration 3 starts)
+    worker.dispatch.side_effect = [
+        WorkResult(handle=_make_handle("sess_1", prompt="p1")),
+        WorkResult(handle=_make_handle("sess_1")),
+        WorkResult(handle=_make_handle("sess_1")),
+    ]
+    worker.poll.side_effect = [
+        PollResult(status=WorkStatus.COMPLETED),
+        PollResult(status=WorkStatus.COMPLETED),
+        PollResult(status=WorkStatus.COMPLETED),
+    ]
+    worker.sync.side_effect = [
+        SyncResult(success=True, iter_branch="iter-1", diff_hash="hash1"),
+        SyncResult(success=True, iter_branch="iter-2", diff_hash="hash2"),
+        SyncResult(success=True, iter_branch="iter-3", diff_hash="hash3"),
+    ]
+
+    supervisor = Supervisor(config, worker, tmp_path)
+
+    fail_res = VerificationResult(passed=False, gates=[], duration_seconds=1.0)
 
     with (
-        patch("veridical.supervisor.loop.Dispatcher") as MockDispatcher,
-        patch("veridical.supervisor.loop.Poller") as MockPoller,
-        patch("veridical.supervisor.loop.Synchronizer") as MockSynchronizer,
-        patch("veridical.supervisor.loop.Verifier") as MockVerifier,
+        patch.object(supervisor.verifier, "run_all", AsyncMock(return_value=fail_res)),
+        patch.object(supervisor.verifier, "generate_feedback", AsyncMock(return_value="Error")),
     ):
-        mock_disp = MockDispatcher.return_value
-        session = MagicMock()
-        session.session_id = "sess_1"
-        mock_disp.create_session = AsyncMock(return_value=session)
-
-        mock_poller = MockPoller.return_value
-        poll_result = MagicMock()
-        poll_result.final_state = SessionState.COMPLETED
-        mock_poller.wait_for_completion = AsyncMock(return_value=poll_result)
-
-        mock_sync = MockSynchronizer.return_value
-        # Use different hashes to avoid stagnation detection
-        patch_hashes = iter(["hash1", "hash2", "hash3"])
-
-        iter_counter = iter([1, 2, 3])
-
-        def make_patch_result(*_args, **_kwargs):
-            i = next(iter_counter)
-            return f"iter-{i}", PatchResult(
-                success=True,
-                status=PatchStatus.APPLIED,
-                files_changed=[],
-                diff_hash=next(patch_hashes),
-            )
-
-        mock_sync.apply_session_patch = AsyncMock(side_effect=make_patch_result)
-        mock_sync.work_branch = "feat/task"
-        mock_sync.starting_branch = "main"
-
-        mock_verifier = MockVerifier.return_value
-        fail_res = VerificationResult(passed=False, gates=[], duration_seconds=1.0)
-        mock_verifier.run_all = AsyncMock(return_value=fail_res)
-        mock_verifier.generate_feedback = AsyncMock(return_value="Error")
-
-        supervisor = Supervisor(config, mock_client, tmp_path)
         result = await supervisor.run("Task")
 
-        assert not result.success
-        # With max_iterations=2, iterations 1 and 2 run, then circuit breaker
-        # opens before iteration 3 can start (check happens after record_iteration)
-        assert result.iterations == 3
-        assert "Maximum iterations" in result.failure_reason
-        # Only one session created, subsequent iterations use send_message
-        mock_disp.create_session.assert_called_once()
-        # send_message called once for iteration 2 (iteration 3 doesn't run)
-        mock_client.send_message.assert_called_once()
+    assert not result.success
+    # With max_iterations=2, iterations 1 and 2 run, then circuit breaker
+    # opens before iteration 3 can start (check happens after record_iteration)
+    assert result.iterations == 3
+    assert "Maximum iterations" in result.failure_reason

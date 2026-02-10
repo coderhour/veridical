@@ -137,15 +137,17 @@ Plan Generation → Execution → Artifact Delivery (PR/Patch)
 - **Verifies** code quality using local test suites
 - **Iterates** until all quality gates pass
 
-**Five Core Components:**
+**Core Components:**
 
 1. **Supervisor (Kernel)** - Manages the control loop and state machine
-2. **Dispatcher** - Formats prompts and creates Jules sessions
-3. **Poller** - Monitors asynchronous Jules progress
-4. **Synchronizer** - Applies patches to local git branches
-5. **Verifier** - Runs local tests, linters, and quality gates
+2. **Worker (Protocol)** - Pluggable backend interface (`dispatch`, `poll`, `sync`)
+   - **JulesWorker** - Default implementation wrapping Dispatcher, Poller, and Synchronizer for Google Jules
+3. **Verifier** - Runs local tests, linters, and quality gates
+4. **WorkerRegistry** - Maps backend names to Worker implementations
 
-**Why it matters:** Transforms Jules from a "fire-and-forget" agent into a supervised, iterative system. Ensures code meets YOUR quality standards, not just Jules' self-assessment.
+The **Worker protocol** decouples the Supervisor from any specific AI backend. The `JulesWorker` composes the existing Dispatcher (prompt building, session creation), Poller (status monitoring with backoff), and Synchronizer (patch application to git branches) into a single cohesive unit.
+
+**Why it matters:** Transforms Jules from a "fire-and-forget" agent into a supervised, iterative system. Ensures code meets YOUR quality standards, not just Jules' self-assessment. The Worker abstraction also enables alternative backends (local scripts, other AI services) without modifying the core loop.
 
 ---
 

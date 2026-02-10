@@ -1,4 +1,7 @@
-"""Integration tests for the Supervisor loop."""
+"""Integration tests for the Supervisor loop.
+
+Updated to use the Worker protocol abstraction.
+"""
 
 import subprocess
 from pathlib import Path
@@ -7,6 +10,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from veridical.supervisor.loop import Supervisor
+from veridical.worker.models import (
+    PollResult,
+    SyncResult,
+    WorkHandle,
+    WorkResult,
+    WorkStatus,
+)
+
+
+def _make_handle(session_id: str, **extra: object) -> WorkHandle:
+    return WorkHandle(backend="jules", handle_data={"session_id": session_id, **extra})
 
 
 @pytest.fixture
@@ -24,98 +38,85 @@ def git_repo(tmp_path: Path) -> Path:
 @pytest.mark.asyncio
 @pytest.mark.filterwarnings("ignore::ResourceWarning")
 @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
-async def test_supervisor_initializes_progress_reporter(git_repo: Path) -> None:
-    """Test that the Supervisor initializes the ProgressReporter."""
+async def test_supervisor_initializes_with_worker(git_repo: Path) -> None:
+    """Test that the Supervisor initializes with a Worker instance."""
     config = MagicMock()
-    config.jules.backoff.type = "constant"
-    config.jules.backoff.interval = 0.1
-    client = MagicMock()
+    config.supervisor.max_iterations = 10
+    config.supervisor.max_consecutive_failures = 3
+    config.supervisor.stagnation_threshold = 3
+    config.worklog.enabled = False
 
-    supervisor = Supervisor(config, client, git_repo, verbose=True)
+    worker = AsyncMock()
+    worker.synchronizer = MagicMock()
+    worker.progress = MagicMock()
 
-    assert supervisor.progress is not None
-    assert supervisor.progress.verbose is True
-    assert supervisor.poller.progress == supervisor.progress
+    supervisor = Supervisor(config, worker, git_repo, verbose=True)
+
+    assert supervisor.worker is worker
+    assert supervisor.verbose is True
 
 
 @pytest.mark.asyncio
-@patch("veridical.poller.monitor.Poller.wait_for_completion")
-@patch("veridical.dispatcher.session.Dispatcher.create_session")
-@patch("veridical.synchronizer.patch.Synchronizer.apply_session_patch")
-@patch("veridical.verifier.quality_gate.Verifier.run_all")
-@patch("veridical.supervisor.loop.logger")
-@patch("sys.stdout")
-@patch("sys.stderr")
-@patch("time.sleep", return_value=None)
-@patch("veridical.synchronizer.branch.BranchManager.__init__", return_value=None)
-async def test_supervisor_run_updates_progress(
-    _mock_branch_manager_init: MagicMock,
-    _mock_sleep: MagicMock,
-    _mock_stderr: MagicMock,
-    _mock_stdout: MagicMock,
-    _mock_logger: MagicMock,
-    mock_verifier_run: AsyncMock,
-    mock_apply_patch: AsyncMock,
-    mock_create_session: AsyncMock,
-    mock_wait_for_completion: AsyncMock,
-    git_repo: Path,
-) -> None:
-    """Test that the supervisor run loop updates the progress reporter."""
-    # Mocks
+async def test_supervisor_run_calls_worker_methods(git_repo: Path) -> None:
+    """Test that the supervisor run loop calls Worker protocol methods in order."""
     config = MagicMock(name="config")
-    # Explicitly build the mock config to avoid issues with nested MagicMock
-    # attributes not being set as expected.
-    supervisor_config = MagicMock(name="supervisor_config")
-    supervisor_config.max_iterations = 2
-    supervisor_config.stagnation_threshold = 3
-    supervisor_config.max_consecutive_failures = 5
-    config.supervisor = supervisor_config
-    verifier_config = MagicMock(name="verifier_config")
-    verifier_config.summary_max_length = 4096
-    verifier_config.local_llm = None
-    verifier_config.feedback_mode = "heuristic"
-    config.verifier = verifier_config
-    backoff_config = MagicMock(name="backoff_config")
-    backoff_config.type = "constant"
-    backoff_config.interval = 0.1
-    jules_config = MagicMock(name="jules_config")
-    jules_config.backoff = backoff_config
-    config.jules = jules_config
-    client = AsyncMock()
-    # Mock return values
-    mock_create_session.return_value = MagicMock(session_id="test_session")
-    mock_wait_for_completion.return_value = MagicMock(
-        final_state="COMPLETED",
-    )
-    mock_apply_patch.return_value = ("test-iter-1", MagicMock(success=True, diff_hash="hash"))
-    # Ensure the verifier returns a result with failed gates to trigger feedback generation
+    config.supervisor.max_iterations = 2
+    config.supervisor.stagnation_threshold = 3
+    config.supervisor.max_consecutive_failures = 5
+    config.worklog.enabled = False
+
+    worker = AsyncMock()
+    sync = MagicMock()
+    sync.starting_branch = "main"
+    sync.work_branch = "main"
+    sync._work_branch = "main"
+    sync.setup_work_branch = MagicMock()
+    sync.merge_to_main = MagicMock(return_value="commit123")
+    sync.cleanup_branch = MagicMock()
+    sync.git = MagicMock()
+    sync.patch_applier = MagicMock()
+    worker.synchronizer = sync
+    worker.progress = MagicMock()
+    worker.dispatcher = MagicMock()
+
+    # Iteration 1: dispatch → poll → sync → verify (fail)
+    # Iteration 2: dispatch → poll → sync → verify (pass)
+    worker.dispatch.side_effect = [
+        WorkResult(handle=_make_handle("sess-1", prompt="prompt1")),
+        WorkResult(handle=_make_handle("sess-1")),
+    ]
+    worker.poll.side_effect = [
+        PollResult(status=WorkStatus.COMPLETED),
+        PollResult(status=WorkStatus.COMPLETED),
+    ]
+    worker.sync.side_effect = [
+        SyncResult(success=True, iter_branch="iter-1", diff_hash="hash1"),
+        SyncResult(success=True, iter_branch="iter-2", diff_hash="hash2"),
+    ]
+
+    supervisor = Supervisor(config, worker, git_repo, verbose=True)
+
     gate_result = MagicMock()
     gate_result.name = "test-gate"
     gate_result.exit_code = 1
     gate_result.output = "test output"
     gate_result.error_output = "test error output"
-    mock_verifier_run.return_value = MagicMock(passed=False, failed_gates=[gate_result])
-    # Supervisor and mock progress reporter
-    supervisor = Supervisor(config, client, git_repo, verbose=True)
-    supervisor.synchronizer.branch_manager.base_branch = "main"
-    supervisor.synchronizer.branch_manager.git = supervisor.synchronizer.git
-    supervisor.synchronizer.branch_manager.branch_prefix = "test-iteration-"
-    supervisor.synchronizer.branch_manager.starting_branch = "main"
-    mock_progress = MagicMock()
-    supervisor.progress = mock_progress
-    supervisor.poller.progress = mock_progress
 
-    # Run the loop
-    await supervisor.run("test task")
+    with (
+        patch.object(
+            supervisor.verifier,
+            "run_all",
+            side_effect=[
+                MagicMock(passed=False, failed_gates=[gate_result]),
+                MagicMock(passed=True, gate_results=[]),
+            ],
+        ),
+        patch.object(supervisor.verifier, "generate_feedback", return_value="Test failed"),
+    ):
+        result = await supervisor.run("test task")
 
-    # Assertions
-    assert mock_progress.set_state.call_count > 0
-    mock_progress.set_state.assert_any_call("Creating session...")
-    mock_progress.set_state.assert_any_call("Polling for updates...")
-    mock_progress.set_state.assert_any_call("Applying patch...")
-    mock_progress.set_state.assert_any_call("Running quality gates...")
-    mock_progress.set_state.assert_any_call("Sending feedback...")
-
-    # Check iteration updates
-    mock_progress.set_iterations.assert_any_call(1, 2)
-    mock_progress.set_iterations.assert_any_call(2, 2)
+    assert result.success
+    assert result.iterations == 2
+    assert worker.dispatch.call_count == 2
+    assert worker.poll.call_count == 2
+    assert worker.sync.call_count == 2

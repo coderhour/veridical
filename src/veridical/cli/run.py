@@ -17,6 +17,7 @@ from veridical.config.loader import load_config
 from veridical.exceptions import VeridicalError
 from veridical.openspec import find_open_specs, match_spec_from_description
 from veridical.supervisor.loop import Supervisor
+from veridical.worker.jules import JulesWorker
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +67,9 @@ def run_supervisor(
                 base_url=config.jules.api_base_url,
                 timeout=config.jules.poll_timeout,
             ) as client:
-                # Initialize Supervisor
-                supervisor = Supervisor(config, client, Path.cwd(), verbose=verbose)
+                # Initialize Worker and Supervisor
+                worker = JulesWorker(config, client, Path.cwd(), verbose=verbose, console=console)
+                supervisor = Supervisor(config, worker, Path.cwd(), verbose=verbose)
 
                 if session_id:
                     logger.info(f"Resuming session {session_id} for task: {task}")
