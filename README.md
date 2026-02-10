@@ -782,6 +782,33 @@ Yes. Use the `--no-spec` or `--skip-tasks` flag if you're doing work that doesn'
 ### Does Veridical work with other languages?
 Yes! While Veridical itself is written in Python, you can configure any command in `.veridical.yaml`. You can use it to supervise Go, Rust, JavaScript, or any project with a CLI-based test suite.
 
+## Testing
+
+Veridical uses `pytest` for its test suite. Tests are categorized into `unit`, `integration`, and `e2e` tiers using pytest markers.
+
+### Running Tests
+
+```bash
+# Run all fast tests (unit + integration, skips slow E2E)
+pytest -m "not e2e"
+
+# Run only unit tests
+pytest -m unit
+
+# Run only integration tests
+pytest -m integration
+
+# Run end-to-end tests (requires JULES_API_KEY)
+pytest -m e2e
+
+# Run tests with coverage report
+pytest --cov=src/veridical
+```
+
+### Test Infrastructure
+
+End-to-end tests simulate the full Supervisor loop using a mock Jules API client. Integration tests verify the interaction between components (Synchronizer, Verifier, CircuitBreaker) against temporary git repositories.
+
 ## License
 
 MIT

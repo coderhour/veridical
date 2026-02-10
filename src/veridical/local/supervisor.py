@@ -138,6 +138,9 @@ class LocalSupervisor:
             self._state = SupervisorState.RUNNING
             exit_code = await self.runner.run(error_context, task=task_description)
 
+            if log_entry and self.runner.last_command:
+                log_entry.prompt_sent = self.runner.last_command
+
             if exit_code != 0:
                 self.console.print(
                     f"[yellow]Worker command failed with exit code {exit_code}[/yellow]"

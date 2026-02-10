@@ -1,9 +1,20 @@
 """Shared pytest fixtures for all test types."""
 
+import subprocess
+import tempfile
 from collections.abc import Generator
 from pathlib import Path
 
 import pytest
+
+from veridical.config.schema import (
+    GitConfig,
+    JulesConfig,
+    QualityGate,
+    SupervisorConfig,
+    VeridicalConfig,
+    VerifierConfig,
+)
 
 
 @pytest.fixture
@@ -53,8 +64,6 @@ def sample_config_path(temp_dir: Path, sample_config_yaml: str) -> Path:
 @pytest.fixture
 def mock_git_repo(temp_dir: Path) -> Generator[Path, None, None]:
     """Create a temporary git repository for testing."""
-    import subprocess
-
     repo_path = temp_dir / "test_repo"
     repo_path.mkdir()
 
@@ -66,10 +75,7 @@ def mock_git_repo(temp_dir: Path) -> Generator[Path, None, None]:
         check=True,
     )
     subprocess.run(
-        ["git", "config", "user.name", "Test User"],
-        cwd=repo_path,
-        capture_output=True,
-        check=True,
+        ["git", "config", "user.name", "Test User"], cwd=repo_path, capture_output=True, check=True
     )
 
     # Create initial commit
@@ -77,10 +83,75 @@ def mock_git_repo(temp_dir: Path) -> Generator[Path, None, None]:
     readme.write_text("# Test Repository\n")
     subprocess.run(["git", "add", "."], cwd=repo_path, capture_output=True, check=True)
     subprocess.run(
-        ["git", "commit", "-m", "Initial commit"],
-        cwd=repo_path,
-        capture_output=True,
-        check=True,
+        ["git", "commit", "-m", "Initial commit"], cwd=repo_path, capture_output=True, check=True
     )
 
     yield repo_path
+
+
+@pytest.fixture
+def e2e_temp_repo():
+    """Create a temporary git repository for E2E testing with a remote origin and main branch."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        repo_path = Path(tmpdir)
+        subprocess.run(["git", "init"], cwd=repo_path, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@example.com"],
+            cwd=repo_path,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test User"],
+            cwd=repo_path,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "remote", "add", "origin", "https://github.com/test-owner/test-repo.git"],
+            cwd=repo_path,
+            check=True,
+            capture_output=True,
+        )
+        (repo_path / "README.md").write_text("# Test Project\n")
+        subprocess.run(["git", "add", "."], cwd=repo_path, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", "Initial commit"],
+            cwd=repo_path,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "branch", "-M", "main"], cwd=repo_path, check=True, capture_output=True
+        )
+        yield repo_path
+
+
+@pytest.fixture
+def e2e_config(mock_git_repo):
+    """Create a test configuration for E2E tests."""
+    mock_git_repo.exists()
+    return VeridicalConfig(
+        jules=JulesConfig(
+            api_base_url="https://test.example.com",
+            poll_interval=1,
+            poll_timeout=60,
+            auto_approve_plans=True,
+        ),
+        supervisor=SupervisorConfig(
+            max_iterations=5,
+            max_consecutive_failures=3,
+            stagnation_threshold=3,
+        ),
+        verifier=VerifierConfig(
+            quality_gates=[
+                QualityGate(name="test-gate", command="exit 0", timeout=10, required=True),
+            ],
+        ),
+        git=GitConfig(
+            base_branch="main",
+            branch_prefix="veridical/iter-",
+            auto_cleanup=True,
+            auto_create_work_branch=False,
+        ),
+    )

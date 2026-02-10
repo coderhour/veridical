@@ -38,6 +38,7 @@ class LocalRunner:
         self.console = console
         self.provider = provider
         self.worktree_branch = worktree_branch
+        self.last_command: str | None = None
 
     async def run(
         self,
@@ -81,6 +82,7 @@ class LocalRunner:
             env[self.config.error_env_var] = error_context
             logger.debug(f"Passing error context via {self.config.error_env_var}")
 
+        self.last_command = command
         logger.info(f"Executing worker command: {command}")
         self.console.print(f"[dim]Running worker: {command}[/dim]")
 
