@@ -581,13 +581,14 @@ async def run_autonomous_loop():
 
 ## Architecture
 
-Veridical uses a **Control Loop Architecture** with five core components:
+Veridical uses a **Control Loop Architecture** with the following core components:
 
 1. **Supervisor**: Orchestrates the entire loop (IDLE → DISPATCHING → POLLING → SYNCING → VERIFYING)
-2. **Dispatcher**: Builds prompts and creates Jules sessions
-3. **Poller**: Monitors session status with intelligent backoff
-4. **Synchronizer**: Applies patches to local git branches
-5. **Verifier**: Runs quality gates and generates feedback
+2. **Worker**: Abstraction for the AI agent or tool being supervised (e.g., Google Jules)
+   - **Dispatcher**: Builds prompts and creates sessions (Internal to JulesWorker)
+   - **Poller**: Monitors session status with intelligent backoff (Internal to JulesWorker)
+   - **Synchronizer**: Applies patches to local git branches (Internal to JulesWorker)
+3. **Verifier**: Runs quality gates and generates feedback
 
 ## Development
 

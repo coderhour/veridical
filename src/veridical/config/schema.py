@@ -341,6 +341,15 @@ class WorkLogConfig(BaseModel):
     )
 
 
+class WorkerConfig(BaseModel):
+    """Configuration for the worker backend."""
+
+    backend: str = Field(
+        "jules",
+        description="Worker backend to use (e.g., 'jules')",
+    )
+
+
 class VeridicalConfig(BaseSettings):
     """Root configuration for Veridical.
 
@@ -361,6 +370,7 @@ class VeridicalConfig(BaseSettings):
     jules: JulesConfig = Field(default_factory=JulesConfig)
     supervisor: SupervisorConfig = Field(default_factory=SupervisorConfig)
     local: LocalConfig = Field(default_factory=LocalConfig)
+    worker: WorkerConfig = Field(default_factory=WorkerConfig)
     verifier: VerifierConfig = Field(default_factory=VerifierConfig)
     git: GitConfig = Field(default_factory=GitConfig)
     worklog: WorkLogConfig = Field(default_factory=WorkLogConfig)
