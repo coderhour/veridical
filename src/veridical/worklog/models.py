@@ -24,3 +24,6 @@ class WorkLogEntry(BaseModel):
     verification_passed: bool | None = None
     verification_errors: str | None = None
     duration_seconds: float | None = None
+    api_calls_count: int | None = None
+    estimated_tokens: int | None = None
+    vm_time_seconds: float | None = None

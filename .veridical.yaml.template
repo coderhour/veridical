@@ -156,6 +156,17 @@ verifier:
     #     - name: typecheck
     #       command: mypy src/
 
+# ------------------------------------------------------------------------------
+# Report Configuration
+# ------------------------------------------------------------------------------
+report:
+  # Default output format for `veri report`
+  # Available values: terminal, json, html
+  default_format: terminal
+
+  # Optional: Path to custom Jinja2 template for HTML reports
+  # html_template: templates/report.html.j2
+
   # Optional: Local LLM for advanced log analysis (e.g., Ollama)
   # local_llm:
   #   base_url: http://localhost:11434/v1

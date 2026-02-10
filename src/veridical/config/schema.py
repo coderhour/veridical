@@ -405,6 +405,19 @@ class WorkLogConfig(BaseModel):
     )
 
 
+class ReportConfig(BaseModel):
+    """Configuration for report generation."""
+
+    default_format: Literal["terminal", "json", "html"] = Field(
+        "terminal",
+        description="Default output format for reports",
+    )
+    html_template: str | None = Field(
+        None,
+        description="Path to custom Jinja2 template for HTML reports",
+    )
+
+
 class WorkerConfig(BaseModel):
     """Configuration for the worker backend selection."""
 
@@ -441,6 +454,7 @@ class VeridicalConfig(BaseSettings):
     verifier: VerifierConfig = Field(default_factory=VerifierConfig)
     git: GitConfig = Field(default_factory=GitConfig)
     worklog: WorkLogConfig = Field(default_factory=WorkLogConfig)
+    report: ReportConfig = Field(default_factory=ReportConfig)
     worker: WorkerConfig = Field(default_factory=WorkerConfig)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         "INFO",

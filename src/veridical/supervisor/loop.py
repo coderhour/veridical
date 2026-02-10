@@ -451,6 +451,7 @@ class Supervisor:
         session_status: str,
         verification_passed: bool | None = None,
         verification_errors: str | None = None,
+        cost_metadata: dict[str, int | float] | None = None,
     ) -> None:
         """Log the end of an iteration to the work log.
 
@@ -458,6 +459,7 @@ class Supervisor:
             session_status: Status of the Jules session
             verification_passed: Whether verification passed
             verification_errors: Error summary if verification failed
+            cost_metadata: Optional dict with keys api_calls_count, estimated_tokens, vm_time_seconds
         """
         if not self.worklog_writer or not self._current_work_log_entry:
             return
@@ -472,6 +474,19 @@ class Supervisor:
         self._current_work_log_entry.verification_passed = verification_passed
         self._current_work_log_entry.verification_errors = verification_errors
         self._current_work_log_entry.duration_seconds = duration
+
+        # Populate cost metadata if provided
+        if cost_metadata:
+            if "api_calls_count" in cost_metadata:
+                self._current_work_log_entry.api_calls_count = int(cost_metadata["api_calls_count"])
+            if "estimated_tokens" in cost_metadata:
+                self._current_work_log_entry.estimated_tokens = int(
+                    cost_metadata["estimated_tokens"]
+                )
+            if "vm_time_seconds" in cost_metadata:
+                self._current_work_log_entry.vm_time_seconds = float(
+                    cost_metadata["vm_time_seconds"]
+                )
 
         # Write to log
         try:

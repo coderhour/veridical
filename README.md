@@ -397,6 +397,67 @@ worklog:
   enabled: false
 ```
 
+### Run Reports
+
+Veridical can generate structured summaries of completed runs from work log data. Reports include per-iteration breakdowns, aggregate metrics, cost tracking, and pattern detection.
+
+```bash
+# Show report for the most recent run
+veri report
+
+# List all available runs
+veri report --list
+
+# Filter by date
+veri report --date 2026-02-09
+
+# Output as JSON
+veri report --format json
+
+# Generate an HTML report file
+veri report --format html --output report.html
+```
+
+**Report contents:**
+- **Per-iteration breakdown**: Duration, gates failed, verification result, feedback excerpt
+- **Aggregate metrics**: Total iterations, total duration, most-failed gate
+- **Cost tracking**: API calls, estimated tokens, VM time (when available)
+- **Pattern insights** (for runs with 3+ iterations):
+  - Gates that fail frequently across iterations
+  - Gates that fail on first iteration but pass on retry (prompt improvement candidates)
+  - Stagnation detection (same error repeating across consecutive iterations)
+
+**Configuration:**
+```yaml
+report:
+  default_format: terminal  # terminal, json, or html
+  # html_template: templates/report.html.j2  # Optional custom template
+```
+
+**Example terminal output:**
+```
+╭──────────── Run Report ────────────╮
+│ Run: session-abc-123               │
+│ Task: Fix password validation      │
+│ Date: 2026-02-09                   │
+│ Outcome: SUCCESS                   │
+╰────────────────────────────────────╯
+   Aggregate Metrics
+ Total Iterations  3
+ Total Duration    45.0s
+ Most Failed Gate  pytest
+
+   Iteration Breakdown
+ #  Duration  Gates Failed  Result  Feedback Excerpt
+ 1  15.0s     pytest        FAIL    AssertionError: expected True...
+ 2  20.0s     pytest        FAIL    AssertionError: still failing...
+ 3  10.0s     -             PASS    -
+
+ Pattern Insights
+  ⚠ Gate 'pytest' failed on 2/3 iterations
+  ℹ Gate 'pytest' failed on first iteration but passed on retry
+```
+
 
 ## Development Workflow (OpenSpec)
 
