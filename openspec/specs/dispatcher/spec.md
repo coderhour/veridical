@@ -5,7 +5,7 @@ TBD - created by archiving change scaffold-foundation. Update Purpose after arch
 ## Requirements
 ### Requirement: Dispatcher Module Structure
 
-The system SHALL provide a `veridical.dispatcher` module for prompt construction and session management.
+The system SHALL provide a `veridical.dispatcher` module for prompt construction and session management. The `Dispatcher` SHALL be used internally by `JulesWorker` rather than directly by the `Supervisor`.
 
 #### Scenario: Module Import
 

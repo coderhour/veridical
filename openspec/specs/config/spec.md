@@ -40,7 +40,9 @@ The system SHALL define a `VeridicalConfig` Pydantic model.
 #### Scenario: Verifier Config Section
 - **WHEN** accessing `config.verifier`
 - **THEN** it SHALL contain `quality_gates: list[QualityGate]`
-- **AND** each `QualityGate` SHALL have `name: str` and `command: str`
+- **AND** each `QualityGate` SHALL have `name: str` and `type: str` (default: `command`)
+- **AND** `QualityGate` SHALL support types: `command`, `task_completion`, `assertion`, `diff_scope`, `composite`
+- **AND** `QualityGate` SHALL support optional fields: `warn_only: bool`, `when_files_changed: list[str]`, `exit_code_map: dict[int, str]`
 - **AND** it SHALL contain `feedback_mode: str` (default: `auto`)
 
 #### Scenario: Git Config Section
@@ -237,4 +239,112 @@ The system SHALL support configuring a local LLM endpoint.
 - **THEN** it SHALL support `base_url: str` (default: `http://localhost:11434/v1`)
 - **AND** it SHALL support `model: str` (default: `qwen2.5-coder`)
 - **AND** it SHALL support `timeout: int` (default: 60)
+
+### Requirement: gtr Worktree Configuration
+The system SHALL support configuration fields for gtr worktree integration in the `local` config section.
+
+#### Scenario: gtr Enabled Field
+- **WHEN** accessing `config.local`
+- **THEN** it SHALL contain `gtr_enabled: bool` (default: `False`)
+- **AND** when `true`, the local supervisor SHALL create a git worktree for each run
+
+#### Scenario: gtr Auto-Cleanup Field
+- **WHEN** accessing `config.local`
+- **THEN** it SHALL contain `gtr_auto_cleanup: bool` (default: `True`)
+- **AND** when `true`, the worktree SHALL be removed after a successful run
+- **AND** when `false`, the worktree SHALL be preserved after completion regardless of outcome
+
+#### Scenario: Environment Variable Override for gtr
+- **WHEN** environment variable `VERIDICAL_LOCAL__GTR_ENABLED` is set to `true`
+- **THEN** it SHALL override the file-based `local.gtr_enabled` configuration
+- **AND** gtr worktree isolation SHALL be enabled
+
+### Requirement: Local Provider Configuration
+The system SHALL support a `local.provider` configuration field for selecting a named local provider preset.
+
+#### Scenario: Provider Config Field
+- **WHEN** accessing `config.local`
+- **THEN** it SHALL contain `provider: str | None` (default: `None`)
+- **AND** when set, the provider preset SHALL auto-configure `worker_command`, `mode`, and error delivery strategy
+
+#### Scenario: Provider Overrides Worker Command
+- **WHEN** `local.provider` is set to a valid provider name (e.g., `claude-code`)
+- **AND** `local.worker_command` is empty
+- **THEN** the system SHALL use the provider's default command configuration
+- **AND** the provider's error delivery strategy SHALL be used instead of the default env var
+
+#### Scenario: Worker Command Takes Precedence
+- **WHEN** both `local.provider` and `local.worker_command` are set
+- **THEN** `local.worker_command` SHALL take precedence over the provider's default command
+- **AND** the provider's error delivery strategy SHALL still be used
+
+#### Scenario: Unknown Provider Name
+- **WHEN** `local.provider` is set to an unregistered provider name
+- **THEN** the system SHALL raise a `ConfigurationError` listing available providers
+
+### Requirement: Local Provider Registry
+The system SHALL maintain a registry of named local provider presets.
+
+#### Scenario: Built-in Providers
+- **WHEN** querying available providers
+- **THEN** the registry SHALL include `claude-code` and `gemini-cli`
+- **AND** each provider SHALL expose its detection status (whether the tool is available on PATH)
+
+#### Scenario: Provider Registration
+- **WHEN** registering a new provider
+- **THEN** the registry SHALL accept a provider name and a class implementing the `LocalProvider` protocol
+- **AND** duplicate names SHALL overwrite the previous registration
+
+#### Scenario: Provider Listing
+- **WHEN** listing available providers
+- **THEN** the system SHALL return provider names, descriptions, and detection status
+
+### Requirement: Report Configuration
+The system SHALL support a `report` configuration section for report generation settings.
+
+#### Scenario: Report Config Section
+- **WHEN** accessing `config.report`
+- **THEN** it SHALL contain `default_format: str` (default: `terminal`, options: `terminal`, `json`, `html`)
+- **AND** it SHALL contain `html_template: str | None` (default: `None`, path to custom Jinja2 template)
+
+#### Scenario: Report Config Defaults
+- **WHEN** no `report` section is specified in `.veridical.yaml`
+- **THEN** the system SHALL use default values
+- **AND** reports SHALL render in terminal format by default
+
+### Requirement: Worker Backend Configuration
+The system SHALL support selecting and configuring the active worker backend.
+
+#### Scenario: Worker Config Section
+- **WHEN** accessing `config.worker`
+- **THEN** it SHALL contain `backend: str` (default: `jules`)
+- **AND** it SHALL contain backend-specific configuration nested under the backend name
+
+#### Scenario: Default Backend
+- **WHEN** `worker.backend` is not specified
+- **THEN** it SHALL default to `jules`
+- **AND** the system SHALL construct a `JulesWorker` using existing Jules configuration
+
+#### Scenario: Unknown Backend
+- **WHEN** `worker.backend` is set to an unregistered backend name
+- **THEN** the system SHALL raise a `ConfigurationError` listing available backends
+
+### Requirement: Local Mode Configuration
+The system SHALL support a `local` configuration section for the local verify-and-loop mode.
+
+#### Scenario: Local Config Section
+- **WHEN** accessing `config.local`
+- **THEN** it SHALL contain `worker_command: str` (default: `""`)
+- **AND** it SHALL contain `worker_timeout: int` (default: `600`)
+- **AND** it SHALL contain `mode: str` (default: `subprocess`, options: `subprocess`, `interactive`)
+- **AND** it SHALL contain `error_env_var: str` (default: `VERIDICAL_ERROR_CONTEXT`)
+
+#### Scenario: Local Config Validation
+- **WHEN** `veri local` is invoked
+- **AND** `local.worker_command` is empty and no `--worker` flag is provided
+- **THEN** it SHALL raise a `ConfigurationError` with instructions to set the worker command
+
+#### Scenario: Local Config in Template
+- **WHEN** generating a config template
+- **THEN** it SHALL include a commented `local` section with example worker commands for common tools (e.g., `aider`, `claude-code`, custom scripts)
 

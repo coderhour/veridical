@@ -14,7 +14,7 @@ THEN the import SHALL succeed without errors
 
 ### Requirement: Jules Client Interface
 
-The system SHALL provide an async HTTP client for the Jules REST API.
+The system SHALL provide an async HTTP client for the Jules REST API. The client SHALL be used internally by `JulesWorker` rather than directly by the `Supervisor`.
 
 #### Scenario: Client Initialization
 
