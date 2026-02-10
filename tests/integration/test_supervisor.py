@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from veridical.supervisor.loop import Supervisor
+from veridical.worker.jules import JulesWorker
+from veridical.models.result import PatchResult, PatchStatus
 
 
 @pytest.fixture
@@ -31,11 +33,15 @@ async def test_supervisor_initializes_progress_reporter(git_repo: Path) -> None:
     config.jules.backoff.interval = 0.1
     client = MagicMock()
 
-    supervisor = Supervisor(config, client, git_repo, verbose=True)
+    # Create worker
+    worker = JulesWorker(config, client, git_repo)
+
+    supervisor = Supervisor(config, worker, git_repo, verbose=True)
 
     assert supervisor.progress is not None
     assert supervisor.progress.verbose is True
-    assert supervisor.poller.progress == supervisor.progress
+    # Verify worker got the progress reporter
+    assert supervisor.worker.poller.progress == supervisor.progress
 
 
 @pytest.mark.asyncio
@@ -87,7 +93,16 @@ async def test_supervisor_run_updates_progress(
     mock_wait_for_completion.return_value = MagicMock(
         final_state="COMPLETED",
     )
-    mock_apply_patch.return_value = ("test-iter-1", MagicMock(success=True, diff_hash="hash"))
+
+    # Use real PatchResult object to satisfy Pydantic validation in SyncResult
+    patch_result = PatchResult(
+        success=True,
+        files_changed=["test.py"],
+        diff_hash="hash",
+        status=PatchStatus.APPLIED
+    )
+    mock_apply_patch.return_value = ("test-iter-1", patch_result)
+
     # Ensure the verifier returns a result with failed gates to trigger feedback generation
     gate_result = MagicMock()
     gate_result.name = "test-gate"
@@ -95,15 +110,24 @@ async def test_supervisor_run_updates_progress(
     gate_result.output = "test output"
     gate_result.error_output = "test error output"
     mock_verifier_run.return_value = MagicMock(passed=False, failed_gates=[gate_result])
+
+    # Create worker
+    worker = JulesWorker(config, client, git_repo)
+
     # Supervisor and mock progress reporter
-    supervisor = Supervisor(config, client, git_repo, verbose=True)
-    supervisor.synchronizer.branch_manager.base_branch = "main"
-    supervisor.synchronizer.branch_manager.git = supervisor.synchronizer.git
-    supervisor.synchronizer.branch_manager.branch_prefix = "test-iteration-"
-    supervisor.synchronizer.branch_manager.starting_branch = "main"
+    supervisor = Supervisor(config, worker, git_repo, verbose=True)
+
+    # Access components via worker
+    supervisor.worker.synchronizer.branch_manager.base_branch = "main"
+    supervisor.worker.synchronizer.branch_manager.git = supervisor.worker.synchronizer.git
+    supervisor.worker.synchronizer.branch_manager.branch_prefix = "test-iteration-"
+    supervisor.worker.synchronizer.branch_manager.starting_branch = "main"
+
     mock_progress = MagicMock()
     supervisor.progress = mock_progress
-    supervisor.poller.progress = mock_progress
+    # We must explicitly set it on the worker because Supervisor.__init__ called set_progress_reporter
+    # with the REAL progress reporter before we swapped it with mock_progress here.
+    supervisor.worker.set_progress_reporter(mock_progress)
 
     # Run the loop
     await supervisor.run("test task")

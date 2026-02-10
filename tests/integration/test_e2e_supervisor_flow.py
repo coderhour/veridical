@@ -32,6 +32,7 @@ from veridical.config.schema import (
 )
 from veridical.models.result import PatchResult, PatchStatus
 from veridical.supervisor.loop import Supervisor
+from veridical.worker.jules import JulesWorker
 
 
 @pytest.fixture
@@ -271,8 +272,11 @@ class TestE2ESupervisorFlow:
                     ],
                 )
 
+        # Create worker
+        worker = JulesWorker(test_config, mock_client, temp_git_repo)
+
         # Create supervisor
-        supervisor = Supervisor(test_config, mock_client, temp_git_repo)
+        supervisor = Supervisor(test_config, worker, temp_git_repo)
 
         # Track which iteration we're applying a patch for
         patch_application_count = 0
@@ -284,7 +288,7 @@ class TestE2ESupervisorFlow:
             patch_application_count += 1
             branch_name = f"veridical/iter-{patch_application_count}"
             # Create a real iteration branch so merge_to_main works
-            supervisor.synchronizer.create_iteration_branch(patch_application_count)
+            supervisor.worker.synchronizer.create_iteration_branch(patch_application_count)
             # Actually modify a file to simulate patch application
             readme = temp_git_repo / "README.md"
             readme.write_text(f"# Updated Project iteration {patch_application_count}\\n")
@@ -295,7 +299,7 @@ class TestE2ESupervisorFlow:
                 status=PatchStatus.APPLIED,
             )
 
-        supervisor.synchronizer.apply_session_patch = mock_apply_session_patch
+        supervisor.worker.synchronizer.apply_session_patch = mock_apply_session_patch
 
         # Mock the verifier's run_all method
         supervisor.verifier.run_all = mock_run_all
@@ -378,8 +382,11 @@ class TestE2ESupervisorFlow:
             )
         )
 
+        # Create worker
+        worker = JulesWorker(test_config, mock_client, temp_git_repo)
+
         # Create supervisor
-        supervisor = Supervisor(test_config, mock_client, temp_git_repo)
+        supervisor = Supervisor(test_config, worker, temp_git_repo)
 
         # Mock verifier to pass immediately
         supervisor.verifier.run_all = AsyncMock(
@@ -449,8 +456,11 @@ class TestE2ESupervisorFlow:
             )
         )
 
+        # Create worker
+        worker = JulesWorker(test_config, mock_client, temp_git_repo)
+
         # Create supervisor
-        supervisor = Supervisor(test_config, mock_client, temp_git_repo)
+        supervisor = Supervisor(test_config, worker, temp_git_repo)
 
         # Mock the synchronizer's apply_session_patch to avoid actual git patch application
         async def mock_apply_session_patch(_client, _session_id, _iteration):
@@ -461,7 +471,7 @@ class TestE2ESupervisorFlow:
                 status=PatchStatus.APPLIED,
             )
 
-        supervisor.synchronizer.apply_session_patch = mock_apply_session_patch
+        supervisor.worker.synchronizer.apply_session_patch = mock_apply_session_patch
 
         # Mock verifier to always fail
         supervisor.verifier.run_all = AsyncMock(
@@ -522,8 +532,11 @@ class TestE2ESupervisorFlow:
             )
         )
 
+        # Create worker
+        worker = JulesWorker(test_config, mock_client, temp_git_repo)
+
         # Create supervisor
-        supervisor = Supervisor(test_config, mock_client, temp_git_repo)
+        supervisor = Supervisor(test_config, worker, temp_git_repo)
 
         # Mock verifier to pass
         supervisor.verifier.run_all = AsyncMock(
@@ -575,8 +588,11 @@ class TestE2ESupervisorFlow:
         # Mock send_message
         mock_client.send_message = AsyncMock()
 
+        # Create worker
+        worker = JulesWorker(test_config, mock_client, temp_git_repo)
+
         # Create supervisor
-        supervisor = Supervisor(test_config, mock_client, temp_git_repo)
+        supervisor = Supervisor(test_config, worker, temp_git_repo)
 
         # Mock the synchronizer's apply_session_patch to avoid actual git patch application
         # But still track the branch state by calling the mock during apply
@@ -587,7 +603,7 @@ class TestE2ESupervisorFlow:
             apply_patch_count += 1
             branch_name = f"veridical/iter-{apply_patch_count}"
             # Create a real iteration branch so merge/cleanup works
-            supervisor.synchronizer.create_iteration_branch(apply_patch_count)
+            supervisor.worker.synchronizer.create_iteration_branch(apply_patch_count)
             # Record branch state when patch is applied
             result = subprocess.run(
                 ["git", "branch", "--show-current"],
@@ -607,7 +623,7 @@ class TestE2ESupervisorFlow:
                 status=PatchStatus.APPLIED,
             )
 
-        supervisor.synchronizer.apply_session_patch = mock_apply_session_patch
+        supervisor.worker.synchronizer.apply_session_patch = mock_apply_session_patch
 
         # Track verification count
         verify_count = 0

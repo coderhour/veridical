@@ -67,6 +67,12 @@ class TestJulesClientPatch:
 
 @pytest.mark.unit
 class TestSynchronizerLogic:
+    @pytest.fixture(autouse=True)
+    def mock_logger(self):
+        """Mock logger to prevent 'I/O operation on closed file' errors."""
+        with patch("veridical.synchronizer.patch.logger") as mock:
+            yield mock
+
     @pytest.mark.asyncio
     async def test_apply_session_patch(self) -> None:
         with (

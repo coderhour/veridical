@@ -7,7 +7,15 @@ from veridical.verifier.analysis import LogAnalyzer
 
 
 @pytest.mark.integration
+@pytest.mark.filterwarnings("ignore::ResourceWarning")
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 class TestRLMLargeLog:
+    @pytest.fixture(autouse=True)
+    def mock_logger(self):
+        """Mock logger to prevent 'I/O operation on closed file' errors."""
+        with patch("veridical.verifier.analysis.logger") as mock:
+            yield mock
+
     @pytest.fixture
     def llm_config(self) -> LocalLLMConfig:
         """Create test LLM configuration."""
