@@ -26,9 +26,9 @@ class QualityGate(BaseModel):
     """Configuration for a single quality gate."""
 
     name: str = Field(..., description="Name of the quality gate")
-    type: Literal["command", "task_completion", "assertion", "diff_scope", "composite"] = Field(
-        "command", description="Type of the quality gate"
-    )
+    type: Literal[
+        "command", "task_completion", "assertion", "diff_scope", "composite", "test_generation"
+    ] = Field("command", description="Type of the quality gate")
     command: str | None = Field(None, description="Command to execute for 'command' type gates")
     path: str | None = Field(None, description="File path for 'task_completion' type gates")
     timeout: int = Field(300, ge=1, description="Timeout in seconds")
@@ -65,6 +65,21 @@ class QualityGate(BaseModel):
     gates: list["QualityGate"] | None = Field(
         None, description="Sub-gates for 'composite' type gates"
     )
+    # Test generation gate fields
+    coverage_command: str | None = Field(
+        None,
+        description="Command to run for coverage collection (default: 'pytest --cov --cov-report=json')",
+    )
+    coverage_threshold: int | None = Field(
+        None,
+        ge=0,
+        le=100,
+        description="Minimum line coverage percentage for new functions (default: 80)",
+    )
+    coverage_format: str | None = Field(
+        None,
+        description="Format of the coverage report output (default: 'pytest-cov-json')",
+    )
 
     @root_validator(skip_on_failure=True)
     def check_gate_config(cls, values: dict[str, Any]) -> dict[str, Any]:
@@ -94,6 +109,8 @@ class QualityGate(BaseModel):
                 raise ValueError("`mode` is required for 'composite' gate type")
             if not values.get("gates"):
                 raise ValueError("`gates` is required for 'composite' gate type")
+        elif gate_type == "test_generation":
+            pass  # All fields are optional with sensible defaults
 
         # Validate exit_code_map values
         exit_code_map = values.get("exit_code_map")

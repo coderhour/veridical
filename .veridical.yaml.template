@@ -75,7 +75,7 @@ verifier:
 
   # Quality gates to run for verification
   # Gates with `parallel: true` will be grouped into batches and run concurrently
-  # Gate types: command, task_completion, assertion, diff_scope, composite
+  # Gate types: command, task_completion, assertion, diff_scope, composite, test_generation
   quality_gates:
     # Task completion gate (checks tasks.md for completion status)
     - name: task_completion
@@ -157,6 +157,17 @@ verifier:
     #       command: ruff check src/
     #     - name: typecheck
     #       command: mypy src/
+
+    # Test generation gate: verify new/changed code has test coverage
+    # Analyzes the current diff for untested functions and fails if coverage
+    # is below the configured threshold.
+    # - name: test_coverage
+    #   type: test_generation
+    #   coverage_command: "pytest --cov --cov-report=json"  # Command to collect coverage
+    #   coverage_threshold: 80  # Minimum line coverage % for new functions (0-100)
+    #   coverage_format: pytest-cov-json  # Format of the coverage report output
+    #   required: true
+    #   timeout: 300
 
 # ------------------------------------------------------------------------------
 # Report Configuration

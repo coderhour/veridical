@@ -14,6 +14,7 @@ from veridical.verifier.diff_scope import DiffScopeGateRunner
 from veridical.verifier.feedback import FeedbackGenerator
 from veridical.verifier.runner import CommandRunner
 from veridical.verifier.task_completion import verify_task_completion
+from veridical.verifier.test_coverage import TestCoverageGateRunner
 
 if TYPE_CHECKING:
     from veridical.config.schema import QualityGate, VeridicalConfig
@@ -48,6 +49,7 @@ class Verifier:
         self.runner = CommandRunner(repo_path)
         self.assertion_runner = AssertionGateRunner(repo_path)
         self.diff_scope_runner = DiffScopeGateRunner(repo_path)
+        self.test_coverage_runner = TestCoverageGateRunner(repo_path)
         self.current_tasks_file: Path | None = None
         self.changed_files: list[str] | None = None
         self.autofix_enabled: bool = True
@@ -245,6 +247,8 @@ class Verifier:
         if gate.type == "composite":
             composite_runner = CompositeGateRunner(self)
             return await composite_runner.run_gate(gate)
+        if gate.type == "test_generation":
+            return await self.test_coverage_runner.run_gate(gate)
 
         # This should be unreachable due to schema validation
         raise ValueError(f"Unknown quality gate type: {gate.type}")
