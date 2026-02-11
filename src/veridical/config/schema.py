@@ -468,6 +468,36 @@ class WorkerConfig(BaseModel):
     )
 
 
+class HealConfig(BaseModel):
+    """Configuration for the GitHub issue healing intake pipeline."""
+
+    github_token_env_var: str = Field(
+        "GITHUB_TOKEN",
+        description=(
+            "Name of the environment variable containing the GitHub token. "
+            "Token values MUST NOT be stored in config files."
+        ),
+    )
+    watch_interval_seconds: int = Field(
+        60,
+        ge=5,
+        le=3600,
+        description="Polling interval in seconds for --watch mode",
+    )
+    enable_auto_pr: bool = Field(
+        False,
+        description="If true, attempt to publish a GitHub PR on successful verification",
+    )
+    pr_base_branch: str = Field(
+        "main",
+        description="Base branch to target for PRs created by heal",
+    )
+    comment_on_failure: bool = Field(
+        True,
+        description="If true, post a comment on the issue with a diagnostic summary when healing fails",
+    )
+
+
 class VeridicalConfig(BaseSettings):
     """Root configuration for Veridical.
 
@@ -493,6 +523,7 @@ class VeridicalConfig(BaseSettings):
     worklog: WorkLogConfig = Field(default_factory=WorkLogConfig)
     report: ReportConfig = Field(default_factory=ReportConfig)
     worker: WorkerConfig = Field(default_factory=WorkerConfig)
+    heal: HealConfig = Field(default_factory=HealConfig)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         "INFO",
         description="Default logging level",

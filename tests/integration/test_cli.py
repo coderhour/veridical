@@ -87,3 +87,35 @@ class TestCliConfigCommands:
         )
         assert result.exit_code == 0
         assert f"# Veridical Configuration {expected_title}" in result.stdout
+
+
+@pytest.mark.integration
+class TestCliHealCommand:
+    def test_heal_dry_run(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test 'heal' dry run mode."""
+
+        async def fake_fetch_issue(*_args: object, **_kwargs: object) -> object:
+            from veridical.intake.models import GitHubIssue
+
+            return GitHubIssue(
+                owner="o",
+                repo="r",
+                number=1,
+                title="Bug",
+                body="Details",
+                url="https://github.com/o/r/issues/1",
+                labels=["bug"],
+                author="alice",
+            )
+
+        from veridical.intake.fetcher import IssueFetcher
+
+        monkeypatch.setattr(IssueFetcher, "fetch_issue", fake_fetch_issue)
+
+        result = runner.invoke(
+            app,
+            ["heal", "--repo", "o/r", "--issue", "1", "--dry-run"],
+        )
+        assert result.exit_code == 0
+        assert "Dry run" in result.stdout
+        assert "Generated task description" in result.stdout

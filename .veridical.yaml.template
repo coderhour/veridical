@@ -221,6 +221,25 @@ report:
   # gtr_auto_cleanup: true
 
 # ------------------------------------------------------------------------------
+# Issue Healing / Intake Configuration
+# ------------------------------------------------------------------------------
+heal:
+  # Name of env var containing GitHub token (token itself MUST NOT be stored here)
+  github_token_env_var: GITHUB_TOKEN
+
+  # Poll interval for `veri heal --watch` (seconds)
+  watch_interval_seconds: 60
+
+  # If true, publish a PR after successful verification
+  enable_auto_pr: false
+
+  # Base branch for PRs opened by heal
+  pr_base_branch: main
+
+  # If true, post a comment on the issue when healing fails
+  comment_on_failure: true
+
+# ------------------------------------------------------------------------------
 # Git Configuration
 # ------------------------------------------------------------------------------
 git:

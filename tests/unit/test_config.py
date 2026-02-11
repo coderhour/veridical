@@ -30,6 +30,7 @@ from veridical.config.schema import (
     ConstantBackoffConfig,
     ExponentialBackoffConfig,
     GitConfig,
+    HealConfig,
     JulesConfig,
     QualityGate,
     SupervisorConfig,
@@ -127,6 +128,7 @@ class TestVeridicalConfig:
         assert isinstance(config.supervisor, SupervisorConfig)
         assert isinstance(config.verifier, VerifierConfig)
         assert isinstance(config.git, GitConfig)
+        assert isinstance(config.heal, HealConfig)
 
     def test_custom_values(self) -> None:
         """Test configuration with custom values."""
@@ -137,6 +139,26 @@ class TestVeridicalConfig:
         assert isinstance(config.jules.backoff, ConstantBackoffConfig)
         assert config.jules.backoff.interval == 60
         assert config.supervisor.max_iterations == 5
+
+
+@pytest.mark.unit
+class TestHealConfig:
+    """Tests for HealConfig model."""
+
+    def test_defaults(self) -> None:
+        config = HealConfig()
+        assert config.github_token_env_var == "GITHUB_TOKEN"
+        assert config.watch_interval_seconds == 60
+        assert config.enable_auto_pr is False
+        assert config.pr_base_branch == "main"
+        assert config.comment_on_failure is True
+
+    def test_watch_interval_bounds(self) -> None:
+        with pytest.raises(ValidationError):
+            HealConfig(watch_interval_seconds=1)
+
+        with pytest.raises(ValidationError):
+            HealConfig(watch_interval_seconds=40000)
 
 
 @pytest.mark.unit

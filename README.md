@@ -169,6 +169,48 @@ veri run "Fix login bug" --target-branch bugfix/login-correction
 veri run "Fix login bug" -b bugfix/login-correction
 ```
 
+### Issue Healing (`veri heal`)
+
+Veridical can intake a GitHub issue, generate a task description, run the supervisor loop, and optionally publish a PR. This enables autonomous self-healing from issue reports.
+
+```bash
+# Heal a single issue (dry-run to preview)
+veri heal --repo owner/repo --issue 123 --dry-run
+
+# Heal and run the full loop (requires JULES_API_KEY)
+veri heal --repo owner/repo --issue 123
+
+# Enable auto-PR on success and comment on failure
+# (Configure via heal section in .veridical.yaml)
+veri heal --repo owner/repo --issue 123
+
+# Auto-generate an OpenSpec proposal for complex issues
+veri heal --repo owner/repo --issue 123 --auto-spec
+
+# Continuous watch mode (polling until success or interrupted)
+veri heal --repo owner/repo --issue 123 --watch
+```
+
+**Configuration (`heal` section in `.veridical.yaml`)**:
+```yaml
+heal:
+  github_token_env_var: GITHUB_TOKEN  # Env var containing GitHub token
+  watch_interval_seconds: 60            # Poll interval for --watch
+  enable_auto_pr: false                  # Publish PR on success
+  pr_base_branch: main                   # Target branch for PRs
+  comment_on_failure: true                # Comment on issue when healing fails
+```
+
+**How it works**:
+1. **Intake**: Fetches the GitHub issue via REST API.
+2. **Triage**: Classifies as bug/feature/question and estimates complexity (heuristic labels/keywords).
+3. **Task Generation**: Produces a task description string for the supervisor.
+4. **Supervisor**: Runs `Supervisor.run()` (Jules) or `LocalSupervisor.run()` based on `worker.backend`.
+5. **Post-Processing**:
+   - On success: optionally publishes a PR with issue link and verification summary.
+   - On failure: optionally posts a diagnostic comment to the issue.
+6. **Watch Mode**: If `--watch` is set, retries after `watch_interval_seconds` until success or interrupted.
+
 ### Local Mode (Agent Supervision)
 
 Veridical can supervise local agents or scripts, not just Jules. This is useful for testing agents, running local repair scripts, or developing your own AI tools.

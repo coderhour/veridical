@@ -9,6 +9,7 @@ from rich.console import Console
 from veridical import __version__
 from veridical.cli.config import config_app
 from veridical.cli.diagnose import diagnose
+from veridical.cli.heal import heal
 from veridical.cli.local import local_mode
 from veridical.cli.report import report
 from veridical.cli.resume import resume
@@ -28,6 +29,7 @@ app = typer.Typer(
 # Add subcommands
 app.command()(run)
 app.command(name="local")(local_mode)
+app.command()(heal)
 app.command()(resume)
 app.command()(verify)
 app.command()(status)
