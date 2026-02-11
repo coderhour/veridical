@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 
+from veridical.diagnose import Localizer
 from veridical.models.result import LoopResult
 from veridical.supervisor.circuit_breaker import CircuitBreaker
 from veridical.supervisor.state import LoopState, SupervisorState
@@ -74,6 +75,9 @@ class Supervisor:
         # and does not support uploading local patches
         self.verifier.autofix_enabled = False
 
+        # Initialize localizer
+        self.localizer = Localizer(repo_path)
+
         # Initialize work log writer if enabled
         self.worklog_writer: WorkLogWriter | None = None
         if config.worklog.enabled:
@@ -136,6 +140,7 @@ class Supervisor:
             session_id: Optional session ID to resume instead of creating new session
             tasks_file: Optional path to the tasks.md file for dynamic verification
             target_branch: Optional override for the target branch
+            resume_from_state: Whether to resume from a saved state file
 
         Returns:
             Result of the loop execution
@@ -188,8 +193,6 @@ class Supervisor:
             except Exception as e:
                 logger.error(f"Failed to load state file: {e}")
                 self.console.print(f"[bold red]Warning:[/bold red] Failed to load state: {e}")
-                # Fallback to fresh start? Or exit?
-                # For safety, let's continue as fresh if load fails, but warn.
 
         # Set up work branch for this run
         synchronizer.setup_work_branch(task_description, target_branch)
@@ -211,7 +214,6 @@ class Supervisor:
                 iteration = self._circuit_breaker.iteration_count
 
                 # Update current state object for persistence
-                # We do this at start of iteration so we have a safe "checkpoint"
                 if current_session_id:
                     self._update_state(
                         task_description=task_description,
@@ -240,9 +242,37 @@ class Supervisor:
 
                 # 1. DISPATCHING via Worker
                 self._transition_to(SupervisorState.DISPATCHING)
+
+                # PRE-LOCALIZATION ENRICHMENT
+                current_task = task_description
+                current_error = error_context
+
+                try:
+                    if iteration == 1:
+                        # On first iteration, try to localize based on task description
+                        report = self.localizer.localize(task_description)
+                        loc_info = report.to_feedback_string()
+                        if loc_info:
+                            logger.info(f"Enriching initial task with localization: {loc_info}")
+                            current_task = (
+                                f"{task_description}\n\nLocalization Analysis: {loc_info}"
+                            )
+
+                    if current_error:
+                        # On retries, enrich error context with localization
+                        report = self.localizer.localize(current_error)
+                        loc_info = report.to_feedback_string()
+                        if loc_info:
+                            logger.info(
+                                f"Enriching retry error context with localization: {loc_info}"
+                            )
+                            current_error = f"{loc_info}\n\n{current_error}"
+                except Exception as e:
+                    logger.warning(f"Pre-localization failed: {e}")
+
                 work_result = await self.worker.dispatch(
-                    task_description,
-                    error_context,
+                    current_task,
+                    current_error,
                     iteration=iteration,
                     session_id=current_session_id,
                 )

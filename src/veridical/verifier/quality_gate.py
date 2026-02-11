@@ -428,10 +428,13 @@ class Verifier:
         if self.config.verifier.local_llm:
             llm_client = LocalLLMClient(self.config.verifier.local_llm)
 
+        from veridical.diagnose import Localizer
+
         try:
             feedback_generator = FeedbackGenerator(
                 config=self.config.verifier,
                 llm_client=llm_client,
+                localizer=Localizer(self.repo_path),
             )
             return await feedback_generator.generate_feedback(result)
         finally:

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 
+from veridical.diagnose import Localizer
 from veridical.local.gtr import GtrWorktreeManager
 from veridical.local.runner import LocalRunner
 from veridical.models.result import LoopResult
@@ -58,7 +59,6 @@ class LocalSupervisor:
         self._circuit_breaker = CircuitBreaker(
             max_iterations=config.supervisor.max_iterations,
             max_consecutive_failures=config.supervisor.max_consecutive_failures,
-            # Stagnation check might be less relevant without diffs, but we can keep it
             stagnation_threshold=config.supervisor.stagnation_threshold,
         )
 
@@ -67,6 +67,7 @@ class LocalSupervisor:
             config.local, self.console, provider=provider, worktree_branch=gtr_branch
         )
         self.verifier = Verifier(config, repo_path)
+        self.localizer = Localizer(repo_path)
 
         # Initialize work log writer if enabled
         self.worklog_writer: WorkLogWriter | None = None
@@ -96,8 +97,9 @@ class LocalSupervisor:
             try:
                 self._gtr_worktree_path = self._gtr_manager.create_worktree(self.gtr_branch)
                 self.console.print(f"[dim]Created gtr worktree: {self._gtr_worktree_path}[/dim]")
-                # Update verifier to run inside the worktree
+                # Update verifier and localizer to run inside the worktree
                 self.verifier = Verifier(self.config, self._gtr_worktree_path)
+                self.localizer = Localizer(self._gtr_worktree_path)
             except RuntimeError as e:
                 self.console.print(f"[bold red]gtr worktree creation failed:[/bold red] {e}")
                 return LoopResult.failure_result(
@@ -134,9 +136,28 @@ class LocalSupervisor:
                     error_context=error_context,
                 )
 
+            # PRE-LOCALIZATION ENRICHMENT
+            current_task = task_description
+            current_error = error_context
+
+            try:
+                if iteration == 1:
+                    report = self.localizer.localize(task_description)
+                    loc_info = report.to_feedback_string()
+                    if loc_info:
+                        current_task = f"{task_description}\n\nLocalization: {loc_info}"
+
+                if current_error:
+                    report = self.localizer.localize(current_error)
+                    loc_info = report.to_feedback_string()
+                    if loc_info:
+                        current_error = f"{loc_info}\n\n{current_error}"
+            except Exception as e:
+                logger.warning(f"Pre-localization failed: {e}")
+
             # 1. Run Worker
             self._state = SupervisorState.RUNNING
-            exit_code = await self.runner.run(error_context, task=task_description)
+            exit_code = await self.runner.run(current_error, task=current_task)
 
             if log_entry and self.runner.last_command:
                 log_entry.prompt_sent = self.runner.last_command
@@ -145,9 +166,6 @@ class LocalSupervisor:
                 self.console.print(
                     f"[yellow]Worker command failed with exit code {exit_code}[/yellow]"
                 )
-                # We record failure but might continue if it's just a test failure that verification will catch
-                # However, usually if the build/run fails, verification will also fail.
-                # Let's verify anyway to get structured feedback.
 
             # 2. Verify
             self._state = SupervisorState.VERIFYING

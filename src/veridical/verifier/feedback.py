@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from veridical.config.schema import VerifierConfig
+from veridical.diagnose import Localizer
 from veridical.exceptions import VerificationError
 from veridical.lld.client import LocalLLMClient
 from veridical.models.result import GateResult, VerificationResult
@@ -19,21 +20,27 @@ class FeedbackGenerator:
         self,
         config: VerifierConfig,
         llm_client: LocalLLMClient | None = None,
+        localizer: Localizer | None = None,
     ) -> None:
         """Initialize the feedback generator.
 
         Args:
             config: Verifier configuration
             llm_client: Optional client for local LLM-based analysis
+            localizer: Optional root-cause localizer
         """
         self.config = config
         self.llm_client = llm_client
+        self.localizer = localizer
 
-    async def generate_feedback(self, result: VerificationResult) -> str:
+    async def generate_feedback(
+        self, result: VerificationResult, localizer: Localizer | None = None
+    ) -> str:
         """Generate error feedback from verification result.
 
         Args:
             result: Verification result containing gate outcomes
+            localizer: Optional override for the root-cause localizer
 
         Returns:
             Summarized error context for the next iteration
@@ -45,10 +52,13 @@ class FeedbackGenerator:
         if not failed_gates:
             return ""
 
-        tasks = [self._summarize_gate(gate) for gate in failed_gates]
+        # Use passed localizer or the one from init
+        active_localizer = localizer or self.localizer
+
+        tasks = [self._summarize_gate(gate, active_localizer) for gate in failed_gates]
         sections = await asyncio.gather(*tasks)
 
-        full_feedback = "\n\n".join(sections)
+        full_feedback = "\\n\\n".join(sections)
 
         # Truncate if necessary
         if len(full_feedback) > self.config.summary_max_length:
@@ -56,11 +66,21 @@ class FeedbackGenerator:
 
         return full_feedback
 
-    async def _summarize_gate(self, gate: GateResult) -> str:
+    async def _summarize_gate(self, gate: GateResult, localizer: Localizer | None = None) -> str:
         """Summarize a single gate failure."""
         lines = [f"## {gate.name} (exit code {gate.exit_code})"]
         content = gate.error_output or gate.output
         num_lines = len(content.splitlines())
+
+        # Run localization if available
+        if localizer:
+            try:
+                report = localizer.localize(content)
+                loc_feedback = report.to_feedback_string()
+                if loc_feedback:
+                    lines.append(f"{loc_feedback}")
+            except Exception as e:
+                logger.warning(f"Localization failed for gate '{gate.name}': {e}")
 
         use_rlm = self.config.feedback_mode == "rlm" or (
             self.config.feedback_mode == "auto" and num_lines > self.config.rlm_threshold
@@ -79,7 +99,7 @@ class FeedbackGenerator:
         else:
             lines.append(self.compress_log_output(content))
 
-        return "\n".join(lines)
+        return "\\n".join(lines)
 
     async def _summarize_with_llm(self, content: str) -> str:
         """Summarize log content using the local LLM."""
@@ -106,7 +126,7 @@ class FeedbackGenerator:
         # Create tasks for summarizing each chunk
         tasks = []
         for i in range(0, len(lines), chunk_size):
-            chunk_content = "\n".join(lines[i : i + chunk_size])
+            chunk_content = "\\n".join(lines[i : i + chunk_size])
             prompt = prompts.CHUNK_SUMMARIZATION_PROMPT_TEMPLATE.format(log_content=chunk_content)
             tasks.append(self.llm_client.complete(prompt, system_prompt=prompts.SYSTEM_PROMPT))
 
@@ -121,7 +141,7 @@ class FeedbackGenerator:
             return non_empty_summaries[0]
 
         # Combine summaries and perform a final summarization
-        combined_summary = "\n".join(non_empty_summaries)
+        combined_summary = "\\n".join(non_empty_summaries)
         final_prompt = prompts.RECURSIVE_SUMMARIZATION_PROMPT_TEMPLATE.format(
             summaries=combined_summary
         )
@@ -169,4 +189,4 @@ class FeedbackGenerator:
             result_lines.append(lines[idx])
             last_idx = idx
 
-        return "\n".join(result_lines)
+        return "\\n".join(result_lines)
