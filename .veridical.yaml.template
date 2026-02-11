@@ -93,12 +93,14 @@ verifier:
 
     - name: ruff
       command: ruff check src/
+      fix_command: ruff check --fix src/
       timeout: 60
       required: true
       parallel: true
 
     - name: ruff-format
       command: ruff format --check src/
+      fix_command: ruff format src/
       timeout: 60
       required: true
       parallel: true

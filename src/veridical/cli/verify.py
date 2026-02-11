@@ -29,15 +29,26 @@ def verify(
             help="Path to configuration file",
         ),
     ] = None,
+    no_fix: Annotated[
+        bool,
+        typer.Option(
+            "--no-fix",
+            help="Disable autofix for gates with fix_command (check-only mode)",
+        ),
+    ] = False,
 ) -> None:
     """Run quality gates locally.
 
     Executes configured quality gates (tests, linters, type checkers)
     and reports results. Exit code is 0 if all gates pass, 1 otherwise.
 
+    Autofix is enabled by default: gates with a fix_command will
+    automatically attempt to fix issues. Use --no-fix to disable.
+
     Example:
         veridical verify
         veridical verify pytest
+        veridical verify --no-fix
     """
     # Load configuration
     try:
@@ -48,6 +59,8 @@ def verify(
 
     repo_path = Path.cwd()
     verifier = Verifier(config, repo_path)
+    if no_fix:
+        verifier.autofix_enabled = False
 
     console.print("[bold]Running quality gates...[/bold]\n")
 

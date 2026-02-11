@@ -70,6 +70,9 @@ class Supervisor:
 
         # Initialize verifier (the only component the supervisor owns directly)
         self.verifier = Verifier(config, repo_path)
+        # Jules mode: disable autofix since Jules runs on a remote VM
+        # and does not support uploading local patches
+        self.verifier.autofix_enabled = False
 
         # Initialize work log writer if enabled
         self.worklog_writer: WorkLogWriter | None = None

@@ -50,6 +50,7 @@ class Verifier:
         self.diff_scope_runner = DiffScopeGateRunner(repo_path)
         self.current_tasks_file: Path | None = None
         self.changed_files: list[str] | None = None
+        self.autofix_enabled: bool = True
 
     def _group_gates(self, gates: list["QualityGate"]) -> list[list["QualityGate"]]:
         """Group gates into sequential and parallel batches.
@@ -306,6 +307,23 @@ class Verifier:
             if should_stop:
                 break
 
+        # Autofix phase: attempt fix_command for failed gates that have one
+        if self.autofix_enabled:
+            fixed_any = False
+            for i, result in enumerate(results):
+                if result.passed:
+                    continue
+                # Find the gate config for this result
+                gate = next((g for g in gates if g.name == result.name), None)
+                if gate is None or not gate.fix_command:
+                    continue
+                fixed_result = await self._run_autofix(gate)
+                if fixed_result is not None:
+                    results[i] = fixed_result
+                    fixed_any = True
+            if fixed_any:
+                logger.info("Autofix applied; updated gate results.")
+
         duration = time.monotonic() - start_time
         all_passed = all(r.passed for r in results)
 
@@ -345,6 +363,57 @@ class Verifier:
             gates=[result],
             duration_seconds=duration,
         )
+
+    async def _run_autofix(self, gate: "QualityGate") -> GateResult | None:
+        """Run a gate's fix_command and re-verify the gate.
+
+        Args:
+            gate: The quality gate with a fix_command.
+
+        Returns:
+            Updated GateResult if the gate now passes, None otherwise.
+        """
+        assert gate.fix_command is not None
+        logger.info(f"Running autofix for gate '{gate.name}': {gate.fix_command}")
+
+        try:
+            fix_process = await asyncio.create_subprocess_shell(
+                gate.fix_command,
+                cwd=self.repo_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                _stdout, _stderr = await asyncio.wait_for(
+                    fix_process.communicate(),
+                    timeout=gate.timeout,
+                )
+            except TimeoutError:
+                fix_process.kill()
+                await fix_process.wait()
+                logger.warning(f"Autofix command for '{gate.name}' timed out after {gate.timeout}s")
+                return None
+
+            fix_exit_code = fix_process.returncode or 0
+            if fix_exit_code != 0:
+                logger.warning(
+                    f"Autofix command for '{gate.name}' exited with code {fix_exit_code}"
+                )
+                return None
+
+        except Exception as e:
+            logger.warning(f"Autofix command for '{gate.name}' failed: {e}")
+            return None
+
+        # Re-run the gate to see if the fix worked
+        logger.info(f"Re-verifying gate '{gate.name}' after autofix")
+        re_result = await self._run_gate_logic(gate)
+        if re_result.passed:
+            logger.info(f"Autofix resolved gate '{gate.name}'")
+            return re_result
+
+        logger.info(f"Gate '{gate.name}' still fails after autofix")
+        return None
 
     async def generate_feedback(self, result: VerificationResult) -> str:
         """Generate error feedback from a verification result.

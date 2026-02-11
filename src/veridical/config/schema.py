@@ -53,6 +53,11 @@ class QualityGate(BaseModel):
     allowed_patterns: list[str] | None = Field(
         None, description="Glob patterns for allowed modified files in 'diff_scope' type gates"
     )
+    fix_command: str | None = Field(
+        None,
+        description="Command to run automatically when this gate fails (e.g., 'ruff format src/'). "
+        "Only used when autofix is enabled (local mode). Ignored in Jules mode.",
+    )
     # Composite gate fields
     mode: Literal["all_of", "any_of"] | None = Field(
         None, description="Logic mode for 'composite' type gates"

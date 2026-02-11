@@ -50,10 +50,12 @@ verifier:
       required: true
     - name: ruff-check
       command: ruff check src/
+      fix_command: ruff check --fix src/
       timeout: 60
       required: true
     - name: ruff-format
       command: ruff format --check src/
+      fix_command: ruff format src/
       timeout: 60
       required: true
     - name: mypy
@@ -109,10 +111,12 @@ verifier:
       required: true
     - name: eslint
       command: npx eslint .
+      fix_command: npx eslint --fix .
       timeout: 120
       required: true
     - name: prettier
       command: npx prettier --check .
+      fix_command: npx prettier --write .
       timeout: 120
       required: true
   summary_max_length: 2000
@@ -160,6 +164,7 @@ verifier:
       required: true
     - name: mix-format
       command: mix format --check-formatted
+      fix_command: mix format
       timeout: 120
       required: true
     - name: mix-dialyzer
@@ -268,6 +273,7 @@ verifier:
       required: false # Optional, as it may require a separate installation
     - name: gofmt
       command: gofmt -l .
+      fix_command: gofmt -w .
       timeout: 60
       required: true
   summary_max_length: 2000
@@ -315,6 +321,7 @@ verifier:
       required: true
     - name: cargo-fmt
       command: cargo fmt --check
+      fix_command: cargo fmt
       timeout: 120
       required: true
   summary_max_length: 2000
@@ -362,10 +369,12 @@ verifier:
       required: true
     - name: eslint
       command: npx eslint .
+      fix_command: npx eslint --fix .
       timeout: 120
       required: true
     - name: prettier
       command: npx prettier --check .
+      fix_command: npx prettier --write .
       timeout: 120
       required: true
   summary_max_length: 2000
@@ -409,6 +418,7 @@ verifier:
       required: true
     - name: rubocop
       command: bundle exec rubocop
+      fix_command: bundle exec rubocop -A
       timeout: 120
       required: true
   summary_max_length: 2000
@@ -456,6 +466,7 @@ verifier:
       required: true
     - name: php-cs-fixer
       command: ./vendor/bin/php-cs-fixer fix --dry-run --diff
+      fix_command: ./vendor/bin/php-cs-fixer fix
       timeout: 120
       required: true
   summary_max_length: 2000
@@ -499,6 +510,7 @@ verifier:
       required: true
     - name: dotnet-format
       command: dotnet format --verify-no-changes
+      fix_command: dotnet format
       timeout: 120
       required: true
     - name: dotnet-build
