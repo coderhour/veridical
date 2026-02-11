@@ -283,3 +283,19 @@ git:
     # If true (default), patches violating scope are rejected
     # If false, violations are logged as warnings but patch proceeds
     strict_mode: true
+
+# ------------------------------------------------------------------------------
+# Learning Loop Configuration
+# ------------------------------------------------------------------------------
+# learning:
+  # Maximum number of past runs to analyze (1-1000)
+  # history_depth: 50
+
+  # Automatically inject learned rules into dispatch prompts
+  # auto_inject_rules: false
+
+  # Path to the learned rules file (relative to project root)
+  # rules_file: .veridical/learned_rules.yaml
+
+  # Minimum completed runs before pattern analysis is available
+  # min_runs_for_analysis: 5

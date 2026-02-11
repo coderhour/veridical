@@ -10,6 +10,7 @@ from veridical import __version__
 from veridical.cli.config import config_app
 from veridical.cli.diagnose import diagnose
 from veridical.cli.heal import heal
+from veridical.cli.learn import learn_app
 from veridical.cli.local import local_mode
 from veridical.cli.report import report
 from veridical.cli.resume import resume
@@ -36,6 +37,7 @@ app.command()(status)
 app.command()(report)
 app.command()(diagnose)
 app.add_typer(config_app, name="config")
+app.add_typer(learn_app, name="learn")
 
 # Console for output
 console = Console()

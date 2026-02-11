@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 
 from veridical.diagnose import Localizer
+from veridical.learning.rules import RuleManager
 from veridical.local.gtr import GtrWorktreeManager
 from veridical.local.runner import LocalRunner
 from veridical.models.result import LoopResult
@@ -68,6 +69,18 @@ class LocalSupervisor:
         )
         self.verifier = Verifier(config, repo_path)
         self.localizer = Localizer(repo_path)
+
+        # Load learned rules if auto-inject is enabled
+        self._learned_rules_context: str | None = None
+        if config.learning.auto_inject_rules:
+            try:
+                manager = RuleManager(repo_path / config.learning.rules_file)
+                rules = manager.load()
+                if rules:
+                    lines = [f"- {r.rule_text}" for r in rules if r.confidence_score >= 0.3]
+                    self._learned_rules_context = "\n".join(lines) if lines else None
+            except Exception as e:
+                logger.warning(f"Failed to load learned rules: {e}")
 
         # Initialize work log writer if enabled
         self.worklog_writer: WorkLogWriter | None = None
@@ -139,6 +152,10 @@ class LocalSupervisor:
             # PRE-LOCALIZATION ENRICHMENT
             current_task = task_description
             current_error = error_context
+
+            # Inject learned rules into worker environment
+            if self._learned_rules_context and iteration == 1:
+                current_task = f"{current_task}\n\nLearned Rules:\n{self._learned_rules_context}"
 
             try:
                 if iteration == 1:

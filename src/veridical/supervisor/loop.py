@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 
 from veridical.diagnose import Localizer
+from veridical.learning.rules import RuleManager
 from veridical.models.result import LoopResult
 from veridical.supervisor.circuit_breaker import CircuitBreaker
 from veridical.supervisor.state import LoopState, SupervisorState
@@ -77,6 +78,13 @@ class Supervisor:
 
         # Initialize localizer
         self.localizer = Localizer(repo_path)
+
+        # Load learned rules if auto-inject is enabled
+        self._learned_rules_context: str | None = None
+        if config.learning.auto_inject_rules:
+            self._learned_rules_context = self._load_learned_rules_context(
+                repo_path / config.learning.rules_file
+            )
 
         # Initialize work log writer if enabled
         self.worklog_writer: WorkLogWriter | None = None
@@ -246,6 +254,12 @@ class Supervisor:
                 # PRE-LOCALIZATION ENRICHMENT
                 current_task = task_description
                 current_error = error_context
+
+                # Inject learned rules into dispatch prompt
+                if self._learned_rules_context and iteration == 1:
+                    current_task = (
+                        f"{current_task}\n\nLearned Rules:\n{self._learned_rules_context}"
+                    )
 
                 try:
                     if iteration == 1:
@@ -529,6 +543,27 @@ class Supervisor:
             )
         except Exception as e:
             logger.warning(f"Failed to write work log entry: {e}")
+
+    @staticmethod
+    def _load_learned_rules_context(rules_file: Path) -> str | None:
+        """Load learned rules and format them as a context string for prompts.
+
+        Args:
+            rules_file: Path to the learned rules YAML file.
+
+        Returns:
+            Formatted rules string, or None if no rules are available.
+        """
+        try:
+            manager = RuleManager(rules_file)
+            rules = manager.load()
+            if not rules:
+                return None
+            lines = [f"- {r.rule_text}" for r in rules if r.confidence_score >= 0.3]
+            return "\n".join(lines) if lines else None
+        except Exception as e:
+            logger.warning(f"Failed to load learned rules: {e}")
+            return None
 
     def _handle_shutdown(self, signum: int, state_file: Path) -> None:
         """Handle shutdown signals."""

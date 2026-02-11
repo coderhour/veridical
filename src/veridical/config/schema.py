@@ -498,6 +498,30 @@ class HealConfig(BaseModel):
     )
 
 
+class LearningConfig(BaseModel):
+    """Configuration for the learning loop and prompt optimization."""
+
+    history_depth: int = Field(
+        50,
+        ge=1,
+        le=1000,
+        description="Maximum number of past runs to analyze",
+    )
+    auto_inject_rules: bool = Field(
+        False,
+        description="Whether to automatically inject learned rules into dispatch prompts",
+    )
+    rules_file: str = Field(
+        ".veridical/learned_rules.yaml",
+        description="Path to the learned rules file relative to project root",
+    )
+    min_runs_for_analysis: int = Field(
+        5,
+        ge=1,
+        description="Minimum completed runs before pattern analysis is available",
+    )
+
+
 class VeridicalConfig(BaseSettings):
     """Root configuration for Veridical.
 
@@ -524,6 +548,7 @@ class VeridicalConfig(BaseSettings):
     report: ReportConfig = Field(default_factory=ReportConfig)
     worker: WorkerConfig = Field(default_factory=WorkerConfig)
     heal: HealConfig = Field(default_factory=HealConfig)
+    learning: LearningConfig = Field(default_factory=LearningConfig)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         "INFO",
         description="Default logging level",
