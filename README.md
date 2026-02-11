@@ -19,6 +19,10 @@ Veridical requires the following tools to be installed on your system:
     ```
 3.  **Python 3.11+**: The core execution environment.
 4.  **uv** (Recommended): For fast and reliable dependency management.
+5.  **gtr** (Optional): For parallel orchestration with isolated worktrees.
+    ```bash
+    # Install from https://github.com/coderabbitai/git-worktree-runner
+    ```
 
 ### For Development
 
@@ -163,6 +167,11 @@ veri verify
 
 # Check status of active sessions
 veri status
+
+# Parallel orchestration (requires gtr)
+veri parallel "1. Add login page  2. Add signup page  3. Add dashboard"
+veri parallel --tasks-file openspec/changes/my-change/tasks.md
+veri parallel --dry-run "Fix auth; Fix payments; Fix notifications"
 
 # Override the target branch for merging (default: auto-created from spec/task)
 veri run "Fix login bug" --target-branch bugfix/login-correction
@@ -340,6 +349,68 @@ veri run "Implement user authentication"
 
 # Resume the same session later
 veri run "Continue authentication implementation" -s abc123
+```
+
+### Parallel Orchestration (`veri parallel`)
+
+Veridical can decompose large tasks into independent subtasks and execute them in parallel, each in its own isolated gtr worktree. This significantly reduces completion time for multi-part workloads.
+
+**Prerequisites:** Install [gtr](https://github.com/coderabbitai/git-worktree-runner) for worktree isolation.
+
+```bash
+# Decompose and run in parallel (auto-detects structure)
+veri parallel "1. Add login page  2. Add signup page  3. Add dashboard"
+
+# Use an OpenSpec tasks.md file
+veri parallel --tasks-file openspec/changes/my-change/tasks.md
+
+# Use a plain-text task list (one per line)
+veri parallel --task-list tasks.txt
+
+# Override worker concurrency
+veri parallel "Fix auth; Fix payments; Fix notifications" --max-workers 5
+
+# Preview decomposition without executing
+veri parallel --dry-run "1. Add tests  2. Fix linting  3. Update docs"
+```
+
+**How it works:**
+1. **Decompose**: Splits the task using heuristics (numbered lists, bullets, semicolons) or from a `tasks.md` file
+2. **Dispatch**: Creates N concurrent `LocalSupervisor` instances, each in its own gtr worktree
+3. **Monitor**: Tracks worker progress with bounded concurrency via `asyncio.TaskGroup`
+4. **Merge**: Sequentially merges completed branches to detect conflicts incrementally
+5. **Verify**: Runs final integrated verification after all branches are merged
+
+**Configuration:**
+```yaml
+parallel:
+  max_workers: 3              # Maximum concurrent workers (1-20)
+  merge_strategy: sequential  # Only sequential supported in v1
+  final_verification: true    # Run quality gates after merge
+```
+
+**Dashboard:**
+Monitor active parallel sessions with the status dashboard:
+```bash
+veri status --dashboard
+# Shows all gtr worktrees with 'veri/' prefix
+```
+
+**Conflict handling:**
+- On merge conflict: the branch is preserved for manual resolution
+- Worktrees for successfully merged branches are automatically cleaned up
+- Failed branches remain available for inspection
+
+**Examples:**
+```bash
+# Parallel development from OpenSpec
+veri parallel --tasks-file openspec/changes/add-user-auth/tasks.md
+
+# Quick parallel tasks from a numbered list
+veri parallel "1. Implement API endpoints  2. Add frontend components  3. Write tests"
+
+# Override concurrency for large tasks
+veri parallel "Fix module A; Fix module B; Fix module C; Fix module D" --max-workers 4
 ```
 
 #### Workflow Isolation (Branch Strategy)

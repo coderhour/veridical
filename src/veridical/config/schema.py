@@ -522,6 +522,26 @@ class LearningConfig(BaseModel):
     )
 
 
+class ParallelConfig(BaseModel):
+    """Configuration for multi-agent parallel orchestration."""
+
+    max_workers: int = Field(
+        3,
+        ge=1,
+        le=20,
+        description="Maximum number of concurrent worker instances",
+    )
+    merge_strategy: Literal["sequential"] = Field(
+        "sequential",
+        description="Strategy for merging subtask branches. "
+        "'sequential' merges one at a time to detect conflicts incrementally.",
+    )
+    final_verification: bool = Field(
+        True,
+        description="Run the full quality gate suite after merging all subtask branches",
+    )
+
+
 class VeridicalConfig(BaseSettings):
     """Root configuration for Veridical.
 
@@ -549,6 +569,7 @@ class VeridicalConfig(BaseSettings):
     worker: WorkerConfig = Field(default_factory=WorkerConfig)
     heal: HealConfig = Field(default_factory=HealConfig)
     learning: LearningConfig = Field(default_factory=LearningConfig)
+    parallel: ParallelConfig = Field(default_factory=ParallelConfig)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         "INFO",
         description="Default logging level",

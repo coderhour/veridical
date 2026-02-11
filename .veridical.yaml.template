@@ -285,6 +285,21 @@ git:
     strict_mode: true
 
 # ------------------------------------------------------------------------------
+# Parallel Orchestration Configuration
+# ------------------------------------------------------------------------------
+# parallel:
+  # Maximum number of concurrent worker instances (1-20, default: 3)
+  # max_workers: 3
+
+  # Strategy for merging subtask branches after completion
+  # Currently only "sequential" is supported (merges one at a time for
+  # incremental conflict detection)
+  # merge_strategy: sequential
+
+  # Run the full quality gate suite after merging all subtask branches
+  # final_verification: true
+
+# ------------------------------------------------------------------------------
 # Learning Loop Configuration
 # ------------------------------------------------------------------------------
 # learning:
