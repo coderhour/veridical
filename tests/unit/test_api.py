@@ -1,5 +1,6 @@
 """Tests for the Jules API client."""
 
+import json
 from datetime import datetime
 
 import httpx
@@ -9,6 +10,7 @@ import respx
 from veridical.api.client import JulesClient
 from veridical.api.exceptions import APIError, AuthenticationError, RateLimitError
 from veridical.api.models import (
+    AutomationMode,
     CreateSessionRequest,
     GitHubRepoContext,
     SessionResponse,
@@ -44,6 +46,28 @@ class TestAPIModels:
         assert "requirePlanApproval" in data
         assert "sourceContext" in data
         assert data["requirePlanApproval"] is False
+
+    def test_create_session_request_with_options(self) -> None:
+        """Test CreateSessionRequest model with all options."""
+        request = CreateSessionRequest(
+            prompt="Fix the bug",
+            source_context=SourceContext(
+                source="sources/github/owner/repo",
+                github_repo_context=GitHubRepoContext(starting_branch="develop"),
+            ),
+            automation_mode=AutomationMode.MANUAL,
+            require_plan_approval=True,
+        )
+        assert request.automation_mode == AutomationMode.MANUAL
+        assert request.require_plan_approval is True
+        assert (
+            request.source_context.github_repo_context.starting_branch == "develop"
+        )
+
+        data = request.model_dump_api()
+        assert data["automationMode"] == "MANUAL"
+        assert data["requirePlanApproval"] is True
+        assert data["sourceContext"]["githubRepoContext"]["startingBranch"] == "develop"
 
     def test_session_response(self) -> None:
         """Test SessionResponse model."""
@@ -89,6 +113,52 @@ class TestJulesClient:
         client = JulesClient(api_key=api_key)
         with pytest.raises(RuntimeError, match="context manager"):
             _ = client.client
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_create_session_with_options(self, api_key: str) -> None:
+        """Test creating a session with non-default options."""
+        request = CreateSessionRequest(
+            prompt="Fix the bug",
+            source_context=SourceContext(
+                source="sources/github/owner/repo",
+                github_repo_context=GitHubRepoContext(starting_branch="develop"),
+            ),
+            automation_mode=AutomationMode.MANUAL,
+            require_plan_approval=True,
+        )
+
+        # Mock the API call and validate the request payload
+        route = respx.post("https://jules.googleapis.com/v1alpha/sessions").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "name": "sessions/test-456",
+                    "state": "PENDING",
+                    "createTime": "2024-01-01T00:00:00Z",
+                    "updateTime": "2024-01-01T00:00:00Z",
+                },
+            )
+        )
+
+        async with JulesClient(api_key=api_key) as client:
+            response = await client.create_session(request)
+
+        # Verify response
+        assert response.session_id == "test-456"
+
+        # Verify request payload
+        assert route.call_count == 1
+        sent_request = route.calls[0].request
+        assert json.loads(sent_request.content) == {
+            "prompt": "Fix the bug",
+            "sourceContext": {
+                "source": "sources/github/owner/repo",
+                "githubRepoContext": {"startingBranch": "develop"},
+            },
+            "automationMode": "MANUAL",
+            "requirePlanApproval": True,
+        }
 
     @pytest.mark.asyncio
     @respx.mock
